@@ -35,4 +35,5 @@ build/
 Pods/
 
 # SPM resolved (manter Podfile.lock em projetos com CocoaPods, mas .resolved pode ser incluído)
-# Package.resolved — manter para apps (travar versões), ignorar para libraries
+# CLI Tools
+VideoAngleAnalyzer

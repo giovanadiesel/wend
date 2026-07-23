@@ -123,21 +123,16 @@ public final class PoseAnalyzer: ObservableObject {
     ///   ou `nil` se qualquer uma das três articulações não estiver detectada
     ///   com confiança suficiente no frame atual.
     public func evaluateAngle(rule: JointAngleRule) -> AngleEvaluation? {
-        guard
-            let pointA = detectedJoints[rule.jointA],
-            let pointB = detectedJoints[rule.jointB],
-            let pointC = detectedJoints[rule.jointC]
-        else { return nil }
+        guard let eval = evaluateJointAngle(
+            jointA: rule.jointA,
+            jointB: rule.jointB,
+            jointC: rule.jointC,
+            in: detectedJoints
+        ) else { return nil }
 
-        // VNRecognizedPoint usa coordenadas normalizadas (0–1), origem no canto inferior esquerdo.
-        let cgA = CGPoint(x: pointA.location.x, y: pointA.location.y)
-        let cgB = CGPoint(x: pointB.location.x, y: pointB.location.y)
-        let cgC = CGPoint(x: pointC.location.x, y: pointC.location.y)
-
-        let degrees = angle(vertex: cgB, pointA: cgA, pointC: cgC)
         return AngleEvaluation(
-            degrees: degrees,
-            isWithinRange: rule.acceptableRange.contains(degrees)
+            degrees: eval.degrees,
+            isWithinRange: rule.acceptableRange.contains(eval.degrees)
         )
     }
 }
