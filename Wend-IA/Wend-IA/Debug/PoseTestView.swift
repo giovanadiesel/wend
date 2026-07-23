@@ -7,6 +7,7 @@ import Vision
 ///
 /// Exibe:
 /// - Preview em tela cheia da câmera frontal via `CameraManager`
+/// - Leitura grande do ângulo no topo para calibração visual em tempo real
 /// - Círculos ciano sobrepostos em cada articulação detectada pela `PoseAnalyzer`
 /// - HUD com o ângulo calculado para a regra `ombro → quadril → joelho (direito)`
 ///   e indicação visual se está dentro ou fora da faixa aceitável
@@ -64,10 +65,16 @@ struct PoseTestView: View {
                 .ignoresSafeArea()
                 .allowsHitTesting(false) // Transparente para gestos
 
-                // ── 3. HUD de ângulo e status ───────────────────────────────────
+                // ── 3. Layout vertical: topo + fundo ───────────────────────────
                 VStack(spacing: 0) {
-                    dismissButton
+                    // Topo: botão fechar + leitura grande do ângulo
+                    VStack(spacing: 8) {
+                        dismissButton
+                        liveAngleDisplay
+                            .padding(.horizontal, 16)
+                    }
                     Spacer()
+                    // Fundo: HUD detalhado
                     angleHUD
                         .padding(.horizontal, 16)
                         .padding(.bottom, geo.safeAreaInsets.bottom + 16)
@@ -111,6 +118,34 @@ struct PoseTestView: View {
                     .padding(.trailing, 16)
             }
         }
+    }
+
+    /// Exibição grande do ângulo para leitura enquanto o usuário faz o movimento.
+    /// Atualizado a cada frame publicado pelo `PoseAnalyzer`.
+    @ViewBuilder
+    private var liveAngleDisplay: some View {
+        let evaluation = analyzer.evaluateAngle(rule: testRule)
+
+        HStack(alignment: .firstTextBaseline, spacing: 4) {
+            if let eval = evaluation {
+                Text(String(format: "%.0f", eval.degrees))
+                    .font(.system(size: 80, weight: .black, design: .monospaced))
+                    .foregroundColor(eval.isWithinRange ? .green : .white)
+                    .contentTransition(.numericText(countsDown: false))
+                    .animation(.easeOut(duration: 0.1), value: Int(eval.degrees))
+
+                Text("°")
+                    .font(.system(size: 40, weight: .bold, design: .monospaced))
+                    .foregroundColor(eval.isWithinRange ? .green : .white)
+                    .padding(.bottom, 8)
+            } else {
+                Text("--")
+                    .font(.system(size: 80, weight: .black, design: .monospaced))
+                    .foregroundColor(.white.opacity(0.3))
+            }
+        }
+        .frame(maxWidth: .infinity, alignment: .center)
+        .shadow(color: .black.opacity(0.6), radius: 4, x: 0, y: 2)
     }
 
     @ViewBuilder
