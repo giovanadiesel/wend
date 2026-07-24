@@ -150,6 +150,17 @@ final class ExerciseSessionController: ObservableObject {
         }
     }
 
+    /// Encerra a sessão como concluída (disparado ao tocar em 'Finish Exercise'),
+    /// definindo a fase como .sessionFinished e notificando a UI.
+    func finishEarly() {
+        finalizeHoldAccumulation()
+        cancelSubscriptions()
+        phase = .sessionFinished
+        let achieved = holdTimeFromCompletedReps + accumulatedHoldTime
+        let accuracy = sessionElapsedTime > 0 ? min((achieved / sessionElapsedTime) * 100, 100) : withinRangePercentage
+        onSessionFinished?(achieved, accuracy)
+    }
+
     // MARK: - Subscriptions Privadas
 
     private func subscribeToAnalyzer() {

@@ -1,15 +1,38 @@
 import SwiftData
 import SwiftUI
 
-/// Tela de resumo exibida ao fim de um exercício individual.
+/// Sheet de feedback do exercício exibida ao finalizar uma sessão.
 ///
-/// Mostra os dados objetivos da sessão e exibe feedback gerado por Apple Intelligence.
+/// Mostra as estatísticas objetivas da sessão e o feedback gerado por Apple Intelligence.
+/// Contém botão "Next" (na rotina completa) ou "Done" (no último exercício/individual).
 struct SessionSummaryView: View {
 
     // MARK: - Input
 
     let record: SessionRecord
     let definition: StretchDefinition
+    let isRoutineFlow: Bool
+    let isLastExercise: Bool
+    let onNext: () -> Void
+    let onDone: () -> Void
+
+    // MARK: - Initializer
+
+    init(
+        record: SessionRecord,
+        definition: StretchDefinition,
+        isRoutineFlow: Bool = false,
+        isLastExercise: Bool = true,
+        onNext: @escaping () -> Void = {},
+        onDone: @escaping () -> Void = {}
+    ) {
+        self.record = record
+        self.definition = definition
+        self.isRoutineFlow = isRoutineFlow
+        self.isLastExercise = isLastExercise
+        self.onNext = onNext
+        self.onDone = onDone
+    }
 
     // MARK: - State
 
@@ -32,7 +55,7 @@ struct SessionSummaryView: View {
                             .background(WendTheme.Colors.coffee.opacity(0.1))
                             .padding(.horizontal)
                         aiFeedbackSection
-                        doneButton
+                        actionButton
                     }
                     .padding(.horizontal, 20)
                     .padding(.vertical, 28)
@@ -79,7 +102,7 @@ struct SessionSummaryView: View {
                 value: "\(Int(record.withinRangePercentage.rounded()))%",
                 label: "Accuracy",
                 icon: "scope",
-                color: accuracyColor
+                color: WendTheme.Colors.greenBasic
             )
             statCell(
                 value: timeLabel(record.holdDurationAchieved),
@@ -161,24 +184,33 @@ struct SessionSummaryView: View {
                 icon: "hand.thumbsup.fill",
                 iconColor: WendTheme.Colors.greenBasic,
                 title: "What went well",
+                titleColor: WendTheme.Colors.greenBasic,
                 body: fb.whatWentWell
             )
             feedbackRow(
                 icon: "lightbulb.fill",
                 iconColor: Color(hex: "#C8882A"),
                 title: "Tip to improve",
+                titleColor: Color(hex: "#C8882A"),
                 body: fb.tipToImprove
             )
             feedbackRow(
                 icon: "heart.fill",
                 iconColor: Color(hex: "#A0522D"),
                 title: "Encouragement",
+                titleColor: Color(hex: "#A0522D"),
                 body: fb.encouragement
             )
         }
     }
 
-    private func feedbackRow(icon: String, iconColor: Color, title: String, body: String) -> some View {
+    private func feedbackRow(
+        icon: String,
+        iconColor: Color,
+        title: String,
+        titleColor: Color,
+        body: String
+    ) -> some View {
         HStack(alignment: .top, spacing: 12) {
             ZStack {
                 Circle()
@@ -191,7 +223,7 @@ struct SessionSummaryView: View {
             VStack(alignment: .leading, spacing: 3) {
                 Text(title)
                     .font(.system(size: 12, weight: .semibold))
-                    .foregroundColor(WendTheme.Colors.coffee.opacity(0.5))
+                    .foregroundColor(titleColor)
                     .textCase(.uppercase)
                     .kerning(0.4)
                 Text(body)
@@ -206,30 +238,44 @@ struct SessionSummaryView: View {
         .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
     }
 
-    private var doneButton: some View {
-        Button {
-            dismiss()
-        } label: {
-            Text("Done")
-                .font(.system(size: 16, weight: .bold))
-                .foregroundColor(WendTheme.Colors.creamLight)
-                .frame(maxWidth: .infinity, minHeight: 52)
-                .background(WendTheme.Colors.greenDark)
-                .clipShape(Capsule())
+    private var actionButton: some View {
+        Group {
+            if isRoutineFlow && !isLastExercise {
+                Button {
+                    dismiss()
+                    onNext()
+                } label: {
+                    HStack(spacing: 8) {
+                        Text("Next")
+                            .font(.system(size: 16, weight: .bold))
+                        Image(systemName: "arrow.right")
+                            .font(.system(size: 14, weight: .bold))
+                    }
+                    .foregroundColor(WendTheme.Colors.creamLight)
+                    .frame(maxWidth: .infinity, minHeight: 52)
+                    .background(WendTheme.Colors.greenDark)
+                    .clipShape(Capsule())
+                }
+                .buttonStyle(PlainButtonStyle())
+            } else {
+                Button {
+                    dismiss()
+                    onDone()
+                } label: {
+                    Text("Done")
+                        .font(.system(size: 16, weight: .bold))
+                        .foregroundColor(WendTheme.Colors.creamLight)
+                        .frame(maxWidth: .infinity, minHeight: 52)
+                        .background(WendTheme.Colors.greenDark)
+                        .clipShape(Capsule())
+                }
+                .buttonStyle(PlainButtonStyle())
+            }
         }
-        .buttonStyle(PlainButtonStyle())
         .padding(.top, 4)
     }
 
     // MARK: - Helpers
-
-    private var accuracyColor: Color {
-        switch Int(record.withinRangePercentage) {
-        case 80...: return WendTheme.Colors.greenBasic
-        case 60...: return Color(hex: "#C8882A")
-        default:    return Color(hex: "#B05030")
-        }
-    }
 
     private func timeLabel(_ seconds: TimeInterval) -> String {
         let s = Int(seconds.rounded())
@@ -248,6 +294,13 @@ struct SessionSummaryView: View {
         withinRangePercentage: 74
     )
     let definition = StretchDefinition.sampleStretches[1]
-    return SessionSummaryView(record: record, definition: definition)
-        .modelContainer(for: [SessionRecord.self, UserProfile.self], inMemory: true)
+    return SessionSummaryView(
+        record: record,
+        definition: definition,
+        isRoutineFlow: true,
+        isLastExercise: false,
+        onNext: {},
+        onDone: {}
+    )
+    .modelContainer(for: [SessionRecord.self, UserProfile.self], inMemory: true)
 }

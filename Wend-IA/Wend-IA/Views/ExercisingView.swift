@@ -8,8 +8,8 @@ import Vision
 /// Tela de execução de exercício em tempo real.
 ///
 /// Exibe o preview da câmera frontal em tela cheia com overlay de pose e
-/// um card inferior flutuante com suporte a rotina completa (Next/Done)
-/// ou exercício individual.
+/// um card inferior flutuante. Ao concluir cada exercício, apresenta a sheet de feedback
+/// (`SessionSummaryView`) contendo o botão "Next" (na rotina completa) ou "Done" (no último/individual).
 struct ExercisingView: View {
 
     // MARK: - Parâmetros
@@ -26,6 +26,10 @@ struct ExercisingView: View {
 
     @State private var currentIndex: Int
     @State private var routineManager = RoutineManager.shared
+
+    /// Controle da sheet de feedback do exercício concluído.
+    @State private var activeSummaryRecord: SessionRecord?
+    @State private var showSummarySheet = false
 
     // MARK: - Initializer
 
@@ -110,11 +114,8 @@ struct ExercisingView: View {
                         currentIndex: currentIndex,
                         totalCount: stretches.count,
                         isRoutineFlow: isRoutineFlow,
-                        onNextExercise: {
-                            advanceToNextExercise()
-                        },
-                        onFinish: {
-                            finishAndReturnHome()
+                        onFinishExercise: {
+                            ctrl.finishEarly()
                         }
                     )
                     .gesture(
@@ -144,6 +145,22 @@ struct ExercisingView: View {
             analyzer.disconnect()
             controller?.stop()
         }
+        .sheet(isPresented: $showSummarySheet) {
+            if let record = activeSummaryRecord {
+                SessionSummaryView(
+                    record: record,
+                    definition: currentDefinition,
+                    isRoutineFlow: isRoutineFlow,
+                    isLastExercise: currentIndex == stretches.count - 1,
+                    onNext: {
+                        advanceToNextExercise()
+                    },
+                    onDone: {
+                        finishAndReturnHome()
+                    }
+                )
+            }
+        }
         .navigationBarHidden(true)
     }
 
@@ -169,8 +186,9 @@ struct ExercisingView: View {
             analyzer: analyzer,
             targetRepetitions: customReps,
             onSessionFinished: { achieved, accuracy in
-                // Salva o registro da sessão silenciosamente
-                saveRecord(definition: effectiveDefinition, achieved: achieved, accuracy: accuracy)
+                let record = saveRecord(definition: effectiveDefinition, achieved: achieved, accuracy: accuracy)
+                activeSummaryRecord = record
+                showSummarySheet = true
             }
         )
         controller = ctrl
@@ -182,6 +200,7 @@ struct ExercisingView: View {
     }
 
     private func advanceToNextExercise() {
+        showSummarySheet = false
         if currentIndex < stretches.count - 1 {
             withAnimation(.easeInOut(duration: 0.3)) {
                 currentIndex += 1
@@ -193,6 +212,7 @@ struct ExercisingView: View {
     }
 
     private func goToPreviousExercise() {
+        showSummarySheet = false
         if currentIndex > 0 {
             withAnimation(.easeInOut(duration: 0.3)) {
                 currentIndex -= 1
@@ -202,13 +222,10 @@ struct ExercisingView: View {
     }
 
     private func finishAndReturnHome() {
-        if let ctrl = controller {
-            ctrl.stop()
-            let achieved = ctrl.sessionElapsedTime * (ctrl.withinRangePercentage / 100)
-            saveRecord(definition: currentDefinition, achieved: achieved, accuracy: ctrl.withinRangePercentage)
-        }
+        showSummarySheet = false
         camera.stop()
         analyzer.disconnect()
+        controller?.stop()
         dismiss()
     }
 
@@ -370,11 +387,7 @@ private struct BottomSessionCard: View {
     let currentIndex: Int
     let totalCount: Int
     let isRoutineFlow: Bool
-    let onNextExercise: () -> Void
-    let onFinish: () -> Void
-
-    @State private var feedback: SessionFeedback?
-    @State private var isGeneratingFeedback = false
+    let onFinishExercise: () -> Void
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
@@ -430,16 +443,18 @@ private struct BottomSessionCard: View {
                     color: WendTheme.Colors.greenBasic
                 )
             }
-            .padding(.bottom, 14)
+            .padding(.bottom, 16)
 
-            // ── Seção de Feedback da IA (exibida quando o exercício finaliza) ──
-            if controller.phase == .sessionFinished {
-                aiFeedbackBlock
-                    .padding(.bottom, 14)
+            // ── Botão verde "Finish Exercise" ──────────────────────────────────
+            Button(action: onFinishExercise) {
+                Label("Finish Exercise", systemImage: "checkmark.circle")
+                    .font(.system(size: 16, weight: .bold))
+                    .foregroundColor(WendTheme.Colors.creamLight)
+                    .frame(maxWidth: .infinity, minHeight: 52)
+                    .background(WendTheme.Colors.greenDark)
+                    .clipShape(Capsule())
             }
-
-            // ── Botão de ação (Finish Exercise -> Next vs Done) ─────────────────
-            actionButton
+            .buttonStyle(PlainButtonStyle())
         }
         .padding(.horizontal, 20)
         .padding(.top, 20)
@@ -449,128 +464,6 @@ private struct BottomSessionCard: View {
                 .fill(Color(hex: "#FFF4F0").opacity(0.95))
                 .shadow(color: .black.opacity(0.12), radius: 20, x: 0, y: -4)
         )
-        .task(id: controller.phase) {
-            if controller.phase == .sessionFinished {
-                await fetchFeedback()
-            } else {
-                feedback = nil
-            }
-        }
-    }
-
-    // MARK: - AI Feedback Block
-
-    @ViewBuilder
-    private var aiFeedbackBlock: some View {
-        VStack(alignment: .leading, spacing: 8) {
-            HStack(spacing: 6) {
-                Image(systemName: "sparkles")
-                    .font(.system(size: 13, weight: .semibold))
-                    .foregroundColor(WendTheme.Colors.greenDark)
-                Text("Exercise feedback")
-                    .font(.system(size: 13, weight: .bold))
-                    .foregroundColor(WendTheme.Colors.coffee)
-                Spacer()
-                Text("Apple Intelligence")
-                    .font(.system(size: 10, weight: .medium))
-                    .foregroundColor(WendTheme.Colors.coffee.opacity(0.35))
-            }
-
-            if isGeneratingFeedback {
-                HStack(spacing: 8) {
-                    ProgressView().tint(WendTheme.Colors.greenBasic)
-                    Text("Generating feedback...")
-                        .font(.system(size: 13))
-                        .foregroundColor(WendTheme.Colors.coffee.opacity(0.6))
-                }
-                .padding(12)
-                .frame(maxWidth: .infinity, alignment: .leading)
-                .background(WendTheme.Colors.creamLight)
-                .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
-            } else if let fb = feedback {
-                VStack(alignment: .leading, spacing: 8) {
-                    VStack(alignment: .leading, spacing: 2) {
-                        Text("WHAT WENT WELL")
-                            .font(.system(size: 10, weight: .bold))
-                            .foregroundColor(WendTheme.Colors.greenBasic)
-                        Text(fb.whatWentWell)
-                            .font(.system(size: 13, weight: .regular))
-                            .foregroundColor(WendTheme.Colors.coffee)
-                    }
-
-                    VStack(alignment: .leading, spacing: 2) {
-                        Text("TIP TO IMPROVE")
-                            .font(.system(size: 10, weight: .bold))
-                            .foregroundColor(Color(hex: "#C8882A"))
-                        Text(fb.tipToImprove)
-                            .font(.system(size: 13, weight: .regular))
-                            .foregroundColor(WendTheme.Colors.coffee)
-                    }
-                }
-                .padding(12)
-                .frame(maxWidth: .infinity, alignment: .leading)
-                .background(WendTheme.Colors.creamLight)
-                .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
-            }
-        }
-    }
-
-    private func fetchFeedback() async {
-        isGeneratingFeedback = true
-        let achieved = controller.sessionElapsedTime * (controller.withinRangePercentage / 100)
-        let record = SessionRecord(
-            date: Date(),
-            exerciseID: definition.id,
-            holdDurationAchieved: achieved,
-            targetHoldDuration: definition.holdDuration * 3,
-            withinRangePercentage: controller.withinRangePercentage
-        )
-        let result = await CoachingService.generateFeedback(for: record, exerciseName: definition.name)
-        feedback = result
-        isGeneratingFeedback = false
-    }
-
-    // MARK: - Action Button
-
-    private var actionButton: some View {
-        let isFinished = controller.phase == .sessionFinished
-
-        if !isFinished {
-            // Durante o exercício: botão para finalizar antecipadamente
-            return Button(action: {
-                controller.stop()
-            }) {
-                Label("Finish Exercise", systemImage: "checkmark.circle")
-                    .font(.system(size: 16, weight: .bold))
-                    .foregroundColor(WendTheme.Colors.creamLight)
-                    .frame(maxWidth: .infinity, minHeight: 52)
-                    .background(WendTheme.Colors.coffee.opacity(0.85))
-                    .clipShape(Capsule())
-            }
-            .buttonStyle(PlainButtonStyle())
-        } else if isRoutineFlow && currentIndex < totalCount - 1 {
-            // Exercício concluído na rotina completa: botão Next
-            return Button(action: onNextExercise) {
-                Label("Next", systemImage: "arrow.right")
-                    .font(.system(size: 16, weight: .bold))
-                    .foregroundColor(WendTheme.Colors.creamLight)
-                    .frame(maxWidth: .infinity, minHeight: 52)
-                    .background(WendTheme.Colors.greenBasic)
-                    .clipShape(Capsule())
-            }
-            .buttonStyle(PlainButtonStyle())
-        } else {
-            // Último exercício da rotina ou exercício individual: botão Done
-            return Button(action: onFinish) {
-                Label("Done", systemImage: "checkmark.seal.fill")
-                    .font(.system(size: 16, weight: .bold))
-                    .foregroundColor(WendTheme.Colors.creamLight)
-                    .frame(maxWidth: .infinity, minHeight: 52)
-                    .background(WendTheme.Colors.greenDark)
-                    .clipShape(Capsule())
-            }
-            .buttonStyle(PlainButtonStyle())
-        }
     }
 
     // MARK: - Tracking Badge
@@ -612,21 +505,9 @@ private struct BottomSessionCard: View {
         .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
     }
 
-    // MARK: - Computed Strings (No emojis, 100% English)
+    // MARK: - Computed Strings
 
     private var feedbackText: String {
-        if controller.phase == .sessionFinished {
-            if isRoutineFlow {
-                if currentIndex < totalCount - 1 {
-                    return "Exercise complete! Tap Next to continue."
-                } else {
-                    return "Routine complete! All \(totalCount) exercises finished."
-                }
-            } else {
-                return "Exercise complete! Great work today."
-            }
-        }
-
         let isTimeOnly = definition.targetJoints.isEmpty
         if isTimeOnly {
             switch controller.phase {
