@@ -1,13 +1,9 @@
 import SwiftData
 import SwiftUI
 
-
-/// Tela de resumo exibida ao fim de uma sessão de exercício.
+/// Tela de resumo exibida ao fim de um exercício individual.
 ///
-/// Mostra os dados objetivos da sessão e chama `CoachingService.generateFeedback`
-/// para exibir feedback gerado por Apple Intelligence.
-/// O design final (conforme Figma) será aplicado em iteração posterior —
-/// este layout prioriza funcionalidade e testabilidade.
+/// Mostra os dados objetivos da sessão e exibe feedback gerado por Apple Intelligence.
 struct SessionSummaryView: View {
 
     // MARK: - Input
@@ -71,7 +67,7 @@ struct SessionSummaryView: View {
                 .font(.system(size: 26, weight: .bold))
                 .foregroundColor(WendTheme.Colors.coffee)
 
-            Text("Sessão concluída!")
+            Text("Exercise complete")
                 .font(.system(size: 15, weight: .medium))
                 .foregroundColor(WendTheme.Colors.coffee.opacity(0.6))
         }
@@ -81,19 +77,19 @@ struct SessionSummaryView: View {
         HStack(spacing: 12) {
             statCell(
                 value: "\(Int(record.withinRangePercentage.rounded()))%",
-                label: "Precisão",
+                label: "Accuracy",
                 icon: "scope",
                 color: accuracyColor
             )
             statCell(
                 value: timeLabel(record.holdDurationAchieved),
-                label: "Tempo mantido",
+                label: "Hold time",
                 icon: "timer",
                 color: WendTheme.Colors.greenBasic
             )
             statCell(
                 value: timeLabel(record.targetHoldDuration),
-                label: "Meta",
+                label: "Target",
                 icon: "target",
                 color: WendTheme.Colors.coffee.opacity(0.5)
             )
@@ -122,12 +118,11 @@ struct SessionSummaryView: View {
     @ViewBuilder
     private var aiFeedbackSection: some View {
         VStack(alignment: .leading, spacing: 16) {
-            // Cabeçalho da seção
             HStack(spacing: 6) {
                 Image(systemName: "sparkles")
                     .font(.system(size: 14, weight: .semibold))
                     .foregroundColor(WendTheme.Colors.greenDark)
-                Text("Feedback da sessão")
+                Text("Exercise feedback")
                     .font(.system(size: 15, weight: .semibold))
                     .foregroundColor(WendTheme.Colors.coffee)
                 Spacer()
@@ -150,7 +145,7 @@ struct SessionSummaryView: View {
         HStack(spacing: 10) {
             ProgressView()
                 .tint(WendTheme.Colors.greenBasic)
-            Text("Gerando feedback…")
+            Text("Generating feedback...")
                 .font(.system(size: 14))
                 .foregroundColor(WendTheme.Colors.coffee.opacity(0.55))
         }
@@ -165,19 +160,19 @@ struct SessionSummaryView: View {
             feedbackRow(
                 icon: "hand.thumbsup.fill",
                 iconColor: WendTheme.Colors.greenBasic,
-                title: "O que foi bem",
+                title: "What went well",
                 body: fb.whatWentWell
             )
             feedbackRow(
                 icon: "lightbulb.fill",
                 iconColor: Color(hex: "#C8882A"),
-                title: "Dica para melhorar",
+                title: "Tip to improve",
                 body: fb.tipToImprove
             )
             feedbackRow(
                 icon: "heart.fill",
                 iconColor: Color(hex: "#A0522D"),
-                title: "Para motivar",
+                title: "Encouragement",
                 body: fb.encouragement
             )
         }
@@ -215,7 +210,7 @@ struct SessionSummaryView: View {
         Button {
             dismiss()
         } label: {
-            Text("Concluir")
+            Text("Done")
                 .font(.system(size: 16, weight: .bold))
                 .foregroundColor(WendTheme.Colors.creamLight)
                 .frame(maxWidth: .infinity, minHeight: 52)
@@ -252,7 +247,7 @@ struct SessionSummaryView: View {
         targetHoldDuration: 45,
         withinRangePercentage: 74
     )
-    let definition = StretchDefinition.sampleStretches[1] // Bridge Pose
+    let definition = StretchDefinition.sampleStretches[1]
     return SessionSummaryView(record: record, definition: definition)
         .modelContainer(for: [SessionRecord.self, UserProfile.self], inMemory: true)
 }

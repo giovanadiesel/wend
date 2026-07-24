@@ -276,7 +276,7 @@ final class DailyTipService {
 
     private static let allDoneFallbacks = [
         "All done for today! Rest and let the stretches do their work.",
-        "You completed everything today — that's something worth celebrating. 🎉",
+        "You completed everything today — that's something worth celebrating.",
         "Great job finishing your routine! Hydrate and enjoy the rest of your day.",
     ]
 }

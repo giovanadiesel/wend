@@ -8,7 +8,7 @@ import Vision
 /// Tela de execução de exercício em tempo real.
 ///
 /// Exibe o preview da câmera frontal em tela cheia com overlay de pose e
-/// um card inferior flutuante com suporte a rotina completa (Next/Finish)
+/// um card inferior flutuante com suporte a rotina completa (Next/Done)
 /// ou exercício individual.
 struct ExercisingView: View {
 
@@ -69,11 +69,6 @@ struct ExercisingView: View {
 
     @State private var controller: ExerciseSessionController?
 
-    // MARK: - Navegação para Resumo
-
-    @State private var completedRecord: SessionRecord?
-    @State private var navigateToSummary = false
-
     // MARK: - Body
 
     var body: some View {
@@ -119,7 +114,7 @@ struct ExercisingView: View {
                             advanceToNextExercise()
                         },
                         onFinish: {
-                            finishSession(controller: ctrl)
+                            finishAndReturnHome()
                         }
                     )
                     .gesture(
@@ -127,10 +122,8 @@ struct ExercisingView: View {
                             .onEnded { value in
                                 guard isRoutineFlow else { return }
                                 if value.translation.width < -50 {
-                                    // Swipe para a esquerda -> Próximo exercício
                                     advanceToNextExercise()
                                 } else if value.translation.width > 50 {
-                                    // Swipe para a direita -> Exercício anterior
                                     goToPreviousExercise()
                                 }
                             }
@@ -150,11 +143,6 @@ struct ExercisingView: View {
             camera.stop()
             analyzer.disconnect()
             controller?.stop()
-        }
-        .navigationDestination(isPresented: $navigateToSummary) {
-            if let record = completedRecord {
-                SessionSummaryView(record: record, definition: currentDefinition)
-            }
         }
         .navigationBarHidden(true)
     }
@@ -181,11 +169,8 @@ struct ExercisingView: View {
             analyzer: analyzer,
             targetRepetitions: customReps,
             onSessionFinished: { achieved, accuracy in
-                let record = saveRecord(definition: effectiveDefinition, achieved: achieved, accuracy: accuracy)
-                completedRecord = record
-                if !isRoutineFlow || currentIndex == stretches.count - 1 {
-                    navigateToSummary = true
-                }
+                // Salva o registro da sessão silenciosamente
+                saveRecord(definition: effectiveDefinition, achieved: achieved, accuracy: accuracy)
             }
         )
         controller = ctrl
@@ -202,6 +187,8 @@ struct ExercisingView: View {
                 currentIndex += 1
             }
             setupSession()
+        } else {
+            finishAndReturnHome()
         }
     }
 
@@ -214,14 +201,15 @@ struct ExercisingView: View {
         }
     }
 
-    // MARK: - Ações
-
-    private func finishSession(controller: ExerciseSessionController) {
-        controller.stop()
-        let achieved = controller.sessionElapsedTime * (controller.withinRangePercentage / 100)
-        let record = saveRecord(definition: currentDefinition, achieved: achieved, accuracy: controller.withinRangePercentage)
-        completedRecord = record
-        navigateToSummary = true
+    private func finishAndReturnHome() {
+        if let ctrl = controller {
+            ctrl.stop()
+            let achieved = ctrl.sessionElapsedTime * (ctrl.withinRangePercentage / 100)
+            saveRecord(definition: currentDefinition, achieved: achieved, accuracy: ctrl.withinRangePercentage)
+        }
+        camera.stop()
+        analyzer.disconnect()
+        dismiss()
     }
 
     @discardableResult
@@ -388,7 +376,7 @@ private struct BottomSessionCard: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
 
-            // ── Indicador pequeno "1 de 5" (se rotina completa) ──────────────────
+            // ── Indicador pequeno "1 of 5" (se rotina completa) ──────────────────
             if isRoutineFlow {
                 HStack {
                     Text("\(currentIndex + 1) of \(totalCount)")
@@ -441,7 +429,7 @@ private struct BottomSessionCard: View {
             }
             .padding(.bottom, 16)
 
-            // ── Botão de ação (Próximo vs Concluir) ────────────────────────────
+            // ── Botão de ação (Next vs Done) ──────────────────────────────────
             actionButton
         }
         .padding(.horizontal, 20)
@@ -454,7 +442,7 @@ private struct BottomSessionCard: View {
         )
     }
 
-    // MARK: - Action Button (Next vs Finish)
+    // MARK: - Action Button (Next vs Done)
 
     private var actionButton: some View {
         let isFinished = controller.phase == .sessionFinished
@@ -465,10 +453,10 @@ private struct BottomSessionCard: View {
                 if isFinished {
                     onNextExercise()
                 } else {
-                    onFinish()
+                    onNextExercise()
                 }
             } label: {
-                Label(isFinished ? "Next Exercise" : "Finish Exercise", systemImage: isFinished ? "arrow.right" : "checkmark.seal.fill")
+                Label(isFinished ? "Next" : "Next", systemImage: "arrow.right")
                     .font(.system(size: 16, weight: .bold))
                     .foregroundColor(WendTheme.Colors.creamLight)
                     .frame(maxWidth: .infinity, minHeight: 52)
@@ -479,7 +467,7 @@ private struct BottomSessionCard: View {
         } else {
             // Exercício individual ou último exercício da rotina
             return Button(action: onFinish) {
-                Label(isRoutineFlow ? "Finish Routine" : "Finish Exercise", systemImage: "checkmark.seal.fill")
+                Label("Done", systemImage: "checkmark.seal.fill")
                     .font(.system(size: 16, weight: .bold))
                     .foregroundColor(WendTheme.Colors.creamLight)
                     .frame(maxWidth: .infinity, minHeight: 52)
@@ -529,18 +517,18 @@ private struct BottomSessionCard: View {
         .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
     }
 
-    // MARK: - Computed Strings
+    // MARK: - Computed Strings (No emojis, 100% English)
 
     private var feedbackText: String {
         if controller.phase == .sessionFinished {
             if isRoutineFlow {
                 if currentIndex < totalCount - 1 {
-                    return "\(currentIndex + 1) of \(totalCount) completed! Tap Next for the next exercise."
+                    return "Exercise complete! Tap Next for the next stretch."
                 } else {
-                    return "Routine complete! All \(totalCount) exercises done. 🎉"
+                    return "Routine complete! All \(totalCount) exercises finished."
                 }
             } else {
-                return "Session complete! Great work today."
+                return "Exercise complete! Great work today."
             }
         }
 
@@ -551,7 +539,7 @@ private struct BottomSessionCard: View {
                 let pct = Int(controller.holdProgress * 100)
                 return pct < 50
                     ? "Hold the position and breathe slowly."
-                    : "Almost there — keep holding! 💪"
+                    : "Almost there — keep holding!"
             default:
                 return "Hold the position and breathe slowly."
             }
@@ -564,7 +552,7 @@ private struct BottomSessionCard: View {
             let pct = Int(controller.holdProgress * 100)
             return pct < 50
                 ? "Great posture! Keep your breath rhythm."
-                : "Hold it — almost there! 💪"
+                : "Hold it — almost there!"
         case .outOfPosition:
             if let hintRule = definition.targetJoints.first(where: { rule in
                 let idx = definition.targetJoints.firstIndex(where: { $0.jointB == rule.jointB }) ?? 0
@@ -575,7 +563,7 @@ private struct BottomSessionCard: View {
             }
             return "Adjust your position to continue."
         case .sessionFinished:
-            return "Session complete!"
+            return "Exercise complete!"
         }
     }
 
