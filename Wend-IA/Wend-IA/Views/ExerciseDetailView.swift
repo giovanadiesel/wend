@@ -109,6 +109,44 @@ struct ExerciseDetailView: View {
             color: WendTheme.Colors.greenDark
         ) {
             VStack(spacing: 14) {
+                // Time of Day Selector
+                HStack {
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text("Routine period")
+                            .font(.system(size: 14, weight: .semibold))
+                            .foregroundColor(WendTheme.Colors.coffee)
+                        Text("Schedule for morning or evening")
+                            .font(.system(size: 12))
+                            .foregroundColor(WendTheme.Colors.coffee.opacity(0.6))
+                    }
+                    Spacer()
+                    HStack(spacing: 6) {
+                        ForEach(RoutineTimeOfDay.allCases) { tod in
+                            let isSelected = currentTimeOfDay == tod
+                            Button {
+                                withAnimation(.easeInOut(duration: 0.2)) {
+                                    routineManager.updateTimeOfDay(tod, for: definition.id)
+                                }
+                            } label: {
+                                HStack(spacing: 4) {
+                                    Image(systemName: tod.iconSymbol)
+                                        .font(.system(size: 12, weight: .semibold))
+                                    Text(tod.rawValue)
+                                        .font(.system(size: 13, weight: .bold))
+                                }
+                                .padding(.horizontal, 10)
+                                .padding(.vertical, 6)
+                                .foregroundColor(isSelected ? WendTheme.Colors.creamLight : WendTheme.Colors.coffee)
+                                .background(isSelected ? (tod == .morning ? WendTheme.Colors.greenDark : Color(hex: "#3D3860")) : WendTheme.Colors.creamBasic)
+                                .clipShape(Capsule())
+                            }
+                            .buttonStyle(PlainButtonStyle())
+                        }
+                    }
+                }
+
+                Divider()
+
                 // Hold Duration Stepper
                 HStack {
                     VStack(alignment: .leading, spacing: 2) {
@@ -198,6 +236,10 @@ struct ExerciseDetailView: View {
 
     private var currentReps: Int {
         routineManager.targetReps(for: definition)
+    }
+
+    private var currentTimeOfDay: RoutineTimeOfDay {
+        routineManager.timeOfDay(for: definition)
     }
 
     // MARK: - Banner Section

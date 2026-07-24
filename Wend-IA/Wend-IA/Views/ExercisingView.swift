@@ -38,7 +38,7 @@ struct ExercisingView: View {
     // MARK: - Initializer
 
     init(definition: StretchDefinition? = nil, stretches: [StretchDefinition]? = nil, initialIndex: Int = 0) {
-        let list = stretches ?? RoutineManager.shared.activeStretches
+        let list = stretches ?? RoutineManager.shared.activeStretches()
         let activeList = list.isEmpty ? StretchDefinition.sampleStretches : list
         self.stretches = activeList
 
