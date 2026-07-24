@@ -181,7 +181,18 @@ final class ExerciseSessionController: ObservableObject {
     /// Chamado a cada frame. Avalia todas as regras da definição e transita entre fases.
     private func evaluateFrame() {
         guard phase != .sessionFinished else { return }
-        guard !definition.targetJoints.isEmpty else { return }
+
+        // ── Modo time-only (sem regras de ângulo) ────────────────────────────────
+        // Usado por exercícios supinos onde o Vision não detecta os joints
+        // de forma confiável (ex: Lumbar Rotation). O cronômetro inicia
+        // imediatamente sem validação de postura.
+        if definition.targetJoints.isEmpty {
+            if inRangeStartDate == nil && phase != .holdingPosition {
+                inRangeStartDate = Date()
+                phase = .holdingPosition
+            }
+            return
+        }
 
         // Avalia todas as regras e publica os resultados individuais.
         let currentEvaluations = definition.targetJoints.map { rule in

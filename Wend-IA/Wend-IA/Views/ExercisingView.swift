@@ -422,6 +422,22 @@ private struct BottomSessionCard: View {
     // MARK: - Computed Strings
 
     private var feedbackText: String {
+        // Modo time-only (ex: Lumbar Rotation supino) — sem validação de ângulo
+        let isTimeOnly = definition.targetJoints.isEmpty
+        if isTimeOnly {
+            switch controller.phase {
+            case .holdingPosition:
+                let pct = Int(controller.holdProgress * 100)
+                return pct < 50
+                    ? "Hold the position and breathe slowly."
+                    : "Almost there — keep holding! 💪"
+            case .sessionFinished:
+                return "Session complete! Great work today."
+            default:
+                return "Hold the position and breathe slowly."
+            }
+        }
+
         switch controller.phase {
         case .waitingForPosition:
             return "Position yourself in front of the camera."
@@ -431,7 +447,6 @@ private struct BottomSessionCard: View {
                 ? "Great posture! Keep your breath rhythm."
                 : "Hold it — almost there! 💪"
         case .outOfPosition:
-            // Usa a dica da primeira regra com avaliação fora da faixa, se disponível
             if let hintRule = definition.targetJoints.first(where: { rule in
                 let idx = definition.targetJoints.firstIndex(where: { $0.jointB == rule.jointB }) ?? 0
                 return controller.evaluations.indices.contains(idx)

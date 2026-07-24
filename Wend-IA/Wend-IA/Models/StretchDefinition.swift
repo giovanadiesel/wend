@@ -165,13 +165,14 @@ extension StretchDefinition {
         ),
 
         // ── 5. Lumbar Rotation ──────────────────────────────────────────────────
-        // Foco: rotação lombar no plano horizontal. Vídeos disponíveis mostram
-        // exercício supino (swiss ball) onde a câmera lateral não detecta os pontos.
+        // Exercício executado em posição **supina** com swiss ball.
+        // O VNDetectHumanBodyPoseRequest é treinado para poses verticais e não
+        // consegue mapear joints com confiança em posição horizontal — confirmado
+        // na análise de 3 vídeos (0 frames válidos em todos).
         //
-        // Dados observados: 0 frames válidos em todos os 3 vídeos (posição supina).
-        // Faixa estimada com base na anatomia: rotação lombar saudável ~40°–60°
-        // por lado → ângulo total ombro–ombro–quadril ≈ 60°–100°.
-        // TODO: validar na PoseTestView com exercício feito de pé ou sentado.
+        // Solução: `targetJoints` vazio → modo time-only no ExerciseSessionController.
+        // O cronômetro inicia imediatamente; o usuário mantém a posição pelo
+        // holdDuration sem validação de ângulo. PRECISION na sessão será 100%.
         StretchDefinition(
             id: "lumbar-rotation",
             name: "Lumbar Rotation",
@@ -181,19 +182,9 @@ extension StretchDefinition {
             para um lado. Segure a posição e volte ao centro antes de trocar.
             """,
             holdDuration: 20,
-            targetJoints: [
-                // leftShoulder → rightShoulder (vértice) → rightHip
-                // Faixa estimada — vídeos supinos não geraram dados confiáveis.
-                // TODO: recalibrar com vídeo lateral do exercício ou PoseTestView.
-                JointAngleRule(
-                    jointA: .leftShoulder,
-                    jointB: .rightShoulder,
-                    jointC: .rightHip,
-                    acceptableRange: 60.0...100.0,
-                    mistakeHint: "Mantenha os ombros no chão enquanto os joelhos giram para o lado."
-                ),
-            ]
+            targetJoints: [] // Exercício supino — rastreio por tempo (sem ângulo)
         ),
+
     ]
 }
 
