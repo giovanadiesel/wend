@@ -1,6 +1,22 @@
 import SwiftData
 import SwiftUI
 
+// MARK: - Wrapper auxiliar para .sheet(item:)
+
+/// Wrapper `Identifiable` sobre a tupla (record, definition) para uso no `.sheet(item:)`.
+/// Necessário porque tuplas não conformam ao protocolo `Identifiable` diretamente.
+private struct PendingSession: Identifiable {
+    let id: PersistentIdentifier
+    let record: SessionRecord
+    let definition: StretchDefinition
+
+    init(record: SessionRecord, definition: StretchDefinition) {
+        self.id = record.persistentModelID
+        self.record = record
+        self.definition = definition
+    }
+}
+
 /// Tela principal do Wend — dados derivados dos `SessionRecord` reais via SwiftData.
 struct HomeView: View {
 
@@ -21,6 +37,8 @@ struct HomeView: View {
     )
     // TODO: Remover antes do release
     @State private var showDebugCamera = false
+    /// Sessão recém-concluída aguardando exibição do resumo. `nil` quando nenhuma.
+    @State private var pendingSession: PendingSession?
 
     // MARK: - Dados Derivados (calculados a partir dos records reais)
 
@@ -99,6 +117,9 @@ struct HomeView: View {
         .fullScreenCover(isPresented: $showDebugCamera) {
             PoseTestView()
         }
+        .sheet(item: $pendingSession) { pending in
+            SessionSummaryView(record: pending.record, definition: pending.definition)
+        }
     }
 
     // MARK: - Helpers de UI
@@ -131,9 +152,9 @@ struct HomeView: View {
 
     // MARK: - Persistência de Sessão
 
-    /// Salva um `SessionRecord` no ModelContext após o `ExerciseSessionController` finalizar.
+    /// Salva um `SessionRecord` no ModelContext e aciona a exibição do resumo.
     ///
-    /// Chamado pelo closure `onSessionFinished` passado ao controller na tela de exercício.
+    /// Chamado pelo closure `onSessionFinished` do `ExerciseSessionController`.
     func saveSessionRecord(
         for stretch: StretchDefinition,
         holdDurationAchieved: TimeInterval,
@@ -143,11 +164,12 @@ struct HomeView: View {
             date: Date(),
             exerciseID: stretch.id,
             holdDurationAchieved: holdDurationAchieved,
-            targetHoldDuration: stretch.holdDuration * Double(3), // 3 reps
+            targetHoldDuration: stretch.holdDuration * 3,
             withinRangePercentage: withinRangePercentage
         )
         modelContext.insert(record)
-        // SwiftData persiste automaticamente — não é necessário chamar save() explicitamente.
+        // Apresenta o resumo com feedback de IA imediatamente após salvar.
+        pendingSession = PendingSession(record: record, definition: stretch)
     }
 }
 
