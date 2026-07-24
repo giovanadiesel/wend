@@ -71,6 +71,14 @@ final class ExerciseSessionController: ObservableObject {
     /// Número de repetições completas necessárias para encerrar a sessão.
     let targetRepetitions: Int
 
+    /// Closure chamado quando `repsCompleted == targetRepetitions`.
+    /// Recebe `holdDurationAchieved` (tempo total efetivo dentro da faixa)
+    /// e `withinRangePercentage` para persistência no `ModelContext`.
+    ///
+    /// A responsabilidade de criar e salvar `SessionRecord` é da camada de UI —
+    /// o controller não importa SwiftData, mantendo o PoseEngine testável.
+    var onSessionFinished: ((_ holdDurationAchieved: TimeInterval, _ withinRangePercentage: Double) -> Void)?
+
     // MARK: - Dependências
 
     private let analyzer: PoseAnalyzer
@@ -108,14 +116,17 @@ final class ExerciseSessionController: ObservableObject {
     ///   - definition: Exercício a ser executado.
     ///   - analyzer: `PoseAnalyzer` já conectado a um `CameraManager` ativo.
     ///   - targetRepetitions: Número de repetições para encerrar a sessão. Padrão: 3.
+    ///   - onSessionFinished: Closure chamado ao finalizar a sessão com os dados de hold e precisão.
     init(
         definition: StretchDefinition,
         analyzer: PoseAnalyzer,
-        targetRepetitions: Int = 3
+        targetRepetitions: Int = 3,
+        onSessionFinished: ((_ holdDurationAchieved: TimeInterval, _ withinRangePercentage: Double) -> Void)? = nil
     ) {
         self.definition = definition
         self.analyzer = analyzer
         self.targetRepetitions = targetRepetitions
+        self.onSessionFinished = onSessionFinished
         self.evaluations = Array(repeating: nil, count: definition.targetJoints.count)
     }
 
@@ -267,6 +278,12 @@ final class ExerciseSessionController: ObservableObject {
         if repsCompleted >= targetRepetitions {
             cancelSubscriptions()
             phase = .sessionFinished
+
+            // Notifica a camada de UI para persistir o SessionRecord.
+            // holdDurationAchieved = tempo total de hold válido (todas as reps).
+            let achieved = holdTimeFromCompletedReps
+            let accuracy = withinRangePercentage
+            onSessionFinished?(achieved, accuracy)
         }
     }
 }

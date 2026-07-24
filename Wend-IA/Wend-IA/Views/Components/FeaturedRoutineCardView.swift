@@ -1,9 +1,5 @@
 import SwiftUI
-#if canImport(UIKit)
 import UIKit
-#elseif canImport(AppKit)
-import AppKit
-#endif
 
 /// Card em destaque da rotina "Morning Stretch" com banner, badge Cream Light e botão de ação.
 public struct FeaturedRoutineCardView: View {
@@ -86,26 +82,15 @@ public struct FeaturedRoutineCardView: View {
     
     @ViewBuilder
     private var bannerImageView: some View {
-        let assetPath = "/Users/giovana/.gemini/antigravity/scratch/Wend/Assets/morning_stretch_banner.jpg"
-        #if canImport(UIKit)
-        if let uiImage = UIImage(contentsOfFile: assetPath) {
+        // Usa o asset catalog — funciona no device, simulator e preview.
+        // O arquivo morning_stretch_banner.jpg deve estar em Assets.xcassets.
+        if let uiImage = UIImage(named: "morning_stretch_banner") {
             Image(uiImage: uiImage)
                 .resizable()
                 .aspectRatio(contentMode: .fill)
         } else {
             fallbackBannerGradient
         }
-        #elseif canImport(AppKit)
-        if let nsImage = NSImage(contentsOfFile: assetPath) {
-            Image(nsImage: nsImage)
-                .resizable()
-                .aspectRatio(contentMode: .fill)
-        } else {
-            fallbackBannerGradient
-        }
-        #else
-        fallbackBannerGradient
-        #endif
     }
     
     private var fallbackBannerGradient: some View {
