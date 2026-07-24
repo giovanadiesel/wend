@@ -25,8 +25,37 @@ struct ExercisingView: View {
 
     // MARK: - Parâmetros
 
-    /// Exercício selecionado na HomeView ou lista de exercícios.
-    let definition: StretchDefinition
+    /// Lista de exercícios na rotina atual.
+    let stretches: [StretchDefinition]
+    /// Índice inicial do exercício a ser executado.
+    let initialIndex: Int
+
+    // MARK: - State Local
+
+    @State private var currentIndex: Int
+    @State private var routineManager = RoutineManager.shared
+
+    // MARK: - Initializer
+
+    init(definition: StretchDefinition? = nil, stretches: [StretchDefinition]? = nil, initialIndex: Int = 0) {
+        let list = stretches ?? RoutineManager.shared.activeStretches
+        let activeList = list.isEmpty ? StretchDefinition.sampleStretches : list
+        self.stretches = activeList
+
+        if let def = definition, let idx = activeList.firstIndex(where: { $0.id == def.id }) {
+            self.initialIndex = idx
+            self._currentIndex = State(initialValue: idx)
+        } else {
+            let clamped = max(0, min(initialIndex, activeList.count - 1))
+            self.initialIndex = clamped
+            self._currentIndex = State(initialValue: clamped)
+        }
+    }
+
+    /// Exercício em execução no momento.
+    private var currentDefinition: StretchDefinition {
+        stretches[max(0, min(currentIndex, stretches.count - 1))]
+    }
 
     // MARK: - SwiftData
 
@@ -62,20 +91,21 @@ struct ExercisingView: View {
                     PoseOverlayView(
                         joints: analyzer.detectedJoints,
                         evaluations: ctrl.evaluations,
-                        rules: definition.targetJoints
+                        rules: currentDefinition.targetJoints
                     )
                     .ignoresSafeArea()
                     .allowsHitTesting(false)
                 }
 
-                // ── 3. Botão fechar (canto superior esquerdo) ──────────────────
+                // ── 3. Top bar com fechar e indicador "1/5" ─────────────────────
                 VStack {
                     HStack {
                         closeButton
                         Spacer()
+                        stepIndicatorPill
                     }
                     .padding(.top, geo.safeAreaInsets.top + 12)
-                    .padding(.leading, 16)
+                    .padding(.horizontal, 16)
                     Spacer()
                 }
                 .ignoresSafeArea()
@@ -83,7 +113,7 @@ struct ExercisingView: View {
                 // ── 4. Card inferior flutuante ─────────────────────────────────
                 if let ctrl = controller {
                     BottomSessionCard(
-                        definition: definition,
+                        definition: currentDefinition,
                         controller: ctrl,
                         onFinish: { finishSession(controller: ctrl) }
                     )
@@ -105,21 +135,81 @@ struct ExercisingView: View {
         }
         .navigationDestination(isPresented: $navigateToSummary) {
             if let record = completedRecord {
-                SessionSummaryView(record: record, definition: definition)
+                SessionSummaryView(record: record, definition: currentDefinition)
             }
         }
         .navigationBarHidden(true)
     }
 
-    // MARK: - Setup
+    // MARK: - Step Indicator Pill ("1/5")
+
+    private var stepIndicatorPill: some View {
+        Menu {
+            Section("Select exercise") {
+                ForEach(Array(stretches.enumerated()), id: \.element.id) { index, stretch in
+                    Button {
+                        switchExercise(to: index)
+                    } label: {
+                        HStack {
+                            Text("\(index + 1). \(stretch.name)")
+                            if index == currentIndex {
+                                Image(systemName: "checkmark")
+                            }
+                        }
+                    }
+                }
+            }
+        } label: {
+            HStack(spacing: 6) {
+                Text("\(currentIndex + 1)/\(stretches.count)")
+                    .font(.system(size: 14, weight: .bold))
+                    .foregroundColor(WendTheme.Colors.coffee)
+
+                Image(systemName: "chevron.down")
+                    .font(.system(size: 11, weight: .bold))
+                    .foregroundColor(WendTheme.Colors.coffee.opacity(0.6))
+            }
+            .padding(.horizontal, 14)
+            .padding(.vertical, 8)
+            .background(
+                ZStack {
+                    Circle().fill(.ultraThinMaterial)
+                    WendTheme.Colors.creamBasic.opacity(0.75)
+                }
+                .clipShape(Capsule())
+            )
+            .overlay(
+                Capsule()
+                    .stroke(Color.white.opacity(0.4), lineWidth: 1)
+            )
+            .shadow(color: Color.black.opacity(0.1), radius: 6, x: 0, y: 3)
+        }
+    }
+
+    // MARK: - Setup & Switch
 
     private func setupSession() {
+        controller?.stop()
+
+        // Aplica os parâmetros customizados pelo RoutineManager
+        let customHold = routineManager.holdDuration(for: currentDefinition)
+        let customReps = routineManager.targetReps(for: currentDefinition)
+
+        let effectiveDefinition = StretchDefinition(
+            id: currentDefinition.id,
+            name: currentDefinition.name,
+            instructions: currentDefinition.instructions,
+            breathingTip: currentDefinition.breathingTip,
+            holdDuration: customHold,
+            targetJoints: currentDefinition.targetJoints
+        )
+
         let ctrl = ExerciseSessionController(
-            definition: definition,
+            definition: effectiveDefinition,
             analyzer: analyzer,
-            targetRepetitions: 3,
+            targetRepetitions: customReps,
             onSessionFinished: { achieved, accuracy in
-                let record = saveRecord(achieved: achieved, accuracy: accuracy)
+                let record = saveRecord(definition: effectiveDefinition, achieved: achieved, accuracy: accuracy)
                 completedRecord = record
                 navigateToSummary = true
             }
@@ -132,23 +222,30 @@ struct ExercisingView: View {
         ctrl.start()
     }
 
+    private func switchExercise(to index: Int) {
+        guard index >= 0 && index < stretches.count && index != currentIndex else { return }
+        currentIndex = index
+        setupSession()
+    }
+
     // MARK: - Ações
 
     private func finishSession(controller: ExerciseSessionController) {
         controller.stop()
         let achieved = controller.sessionElapsedTime * (controller.withinRangePercentage / 100)
-        let record = saveRecord(achieved: achieved, accuracy: controller.withinRangePercentage)
+        let record = saveRecord(definition: currentDefinition, achieved: achieved, accuracy: controller.withinRangePercentage)
         completedRecord = record
         navigateToSummary = true
     }
 
     @discardableResult
-    private func saveRecord(achieved: TimeInterval, accuracy: Double) -> SessionRecord {
+    private func saveRecord(definition: StretchDefinition, achieved: TimeInterval, accuracy: Double) -> SessionRecord {
+        let customReps = routineManager.targetReps(for: definition)
         let record = SessionRecord(
             date: Date(),
             exerciseID: definition.id,
             holdDurationAchieved: achieved,
-            targetHoldDuration: definition.holdDuration * Double(3),
+            targetHoldDuration: definition.holdDuration * Double(customReps),
             withinRangePercentage: accuracy
         )
         modelContext.insert(record)

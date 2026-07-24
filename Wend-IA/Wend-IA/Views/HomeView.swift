@@ -3,8 +3,6 @@ import SwiftUI
 
 // MARK: - Wrapper auxiliar para .sheet(item:)
 
-/// Wrapper `Identifiable` sobre a tupla (record, definition) para uso no `.sheet(item:)`.
-/// Necessário porque tuplas não conformam ao protocolo `Identifiable` diretamente.
 private struct PendingSession: Identifiable {
     let id: PersistentIdentifier
     let record: SessionRecord
@@ -17,47 +15,54 @@ private struct PendingSession: Identifiable {
     }
 }
 
-/// Tela principal do Wend — dados derivados dos `SessionRecord` reais via SwiftData.
+/// Tela principal do Wend — dados derivados dos `SessionRecord` reais via SwiftData e `RoutineManager`.
 struct HomeView: View {
 
     // MARK: - SwiftData
 
-    /// Todos os registros de sessão, usados para calcular streak e progresso real.
     @Query(sort: \SessionRecord.date, order: .reverse)
     private var allRecords: [SessionRecord]
 
     @Environment(\.modelContext) private var modelContext
 
+    // MARK: - Routine Manager
+
+    @State private var routineManager = RoutineManager.shared
+
     // MARK: - State Local
 
     @State private var selectedTab: WendTab = .exercise
-    /// Serviço de dica diária — mantém a dica atual e aciona geração em background quando necessário.
     @State private var tipService = DailyTipService()
     // TODO: Remover antes do release
     @State private var showDebugCamera = false
-    /// Sessão recém-concluída aguardando exibição do resumo. `nil` quando nenhuma.
+
+    /// Sessão recém-concluída aguardando exibição do resumo.
     @State private var pendingSession: PendingSession?
-    /// Exercício selecionado para iniciar — aciona navegação para ExercisingView.
+
+    /// Exercício selecionado para iniciar no `ExercisingView`.
     @State private var exercisingDefinition: StretchDefinition?
-    /// Controla a sheet da rotina completa do dia.
-    @State private var showRoutineSheet = false
-    /// Exercício selecionado para detalhe individual — abre ExerciseDetailView via sheet.
+
+    /// Exercício selecionado para detalhe individual — abre `ExerciseDetailView`.
     @State private var selectedDetailDefinition: StretchDefinition?
 
-    // MARK: - Dados Derivados (calculados a partir dos records reais)
+    /// Controla exibiçaõ da sheet de adicionar exercício removido.
+    @State private var showAddExerciseSheet = false
 
-    /// Ponto central de cálculo: streak, routineItems e próximo exercício.
-    private var store: SessionStore { SessionStore(records: allRecords) }
+    // MARK: - Dados Derivados
 
     private var streak: UserStreak {
-        UserStreak(
+        let store = SessionStore(records: allRecords)
+        return UserStreak(
             streakDays: store.streakDays,
-            goalsCompleted: store.goalsCompletedToday,
-            totalGoals: store.totalGoalsToday
+            goalsCompleted: completedCountToday,
+            totalGoals: activeStretches.count
         )
     }
 
-    /// IDs dos exercícios concluídos hoje (para repassar às views de rotina).
+    private var activeStretches: [StretchDefinition] {
+        routineManager.activeStretches
+    }
+
     private var completedIDsToday: Set<String> {
         let calendar = Calendar.current
         return Set(
@@ -67,142 +72,161 @@ struct HomeView: View {
         )
     }
 
+    private var completedCountToday: Int {
+        completedIDsToday.intersection(activeStretches.map(\.id)).count
+    }
+
     // MARK: - Body
 
     var body: some View {
         NavigationStack {
-        ZStack(alignment: .bottom) {
-            WendTheme.Colors.creamBasic
-                .ignoresSafeArea()
+            ZStack(alignment: .bottom) {
+                WendTheme.Colors.creamBasic
+                    .ignoresSafeArea()
 
-            ScrollView(.vertical, showsIndicators: false) {
-                VStack(alignment: .leading, spacing: 22) {
+                ScrollView(.vertical, showsIndicators: false) {
+                    VStack(alignment: .leading, spacing: 22) {
 
-                    HeaderView(userName: "Giovana")
-                        .padding(.top, 8)
+                        HeaderView(userName: "Giovana")
+                            .padding(.top, 8)
 
-                    StreakCardView(streak: streak)
+                        StreakCardView(streak: streak)
 
-                    // Featured card: abre a rotina completa
-                    FeaturedRoutineCardView(
-                        title: "Morning Stretch",
-                        description: "Wake up your body with gentle movements focused on the lower back.",
-                        durationText: totalDurationLabel,
-                        exerciseCount: StretchDefinition.sampleStretches.count,
-                        onViewRoutine: {
-                            showRoutineSheet = true
+                        // Featured card: botão START inicia o primeiro exercício da rotina
+                        FeaturedRoutineCardView(
+                            title: "Morning Stretch",
+                            description: "Wake up your body with gentle movements focused on the lower back.",
+                            durationText: totalDurationLabel,
+                            onStart: {
+                                startRoutineSession()
+                            }
+                        )
+
+                        // Lista da rotina interativa (swipe para excluir/editar + botão +)
+                        routineListSection
+
+                        TipCardView(tip: TipItem(
+                            title: "Tip of the day",
+                            text: tipService.currentMessage
+                        ))
+
+                        // ── DEBUG: Remover antes do release ──────────────────
+                        Button { showDebugCamera = true } label: {
+                            Label("Debug: testar câmera", systemImage: "camera.metering.unknown")
+                                .font(.caption)
+                                .foregroundColor(WendTheme.Colors.coffee.opacity(0.35))
+                        }
+                        .frame(maxWidth: .infinity)
+                        .padding(.bottom, 4)
+                        // ────────────────────────────────────────────────────
+                    }
+                    .padding(.horizontal, 20)
+                    .padding(.bottom, 100)
+                }
+
+                CustomTabBarView(selectedTab: $selectedTab)
+                    .padding(.bottom, 12)
+            }
+            .fullScreenCover(isPresented: $showDebugCamera) {
+                PoseTestView()
+            }
+            .sheet(item: $selectedDetailDefinition) { def in
+                NavigationStack {
+                    ExerciseDetailView(
+                        definition: def,
+                        isCompleted: completedIDsToday.contains(def.id),
+                        onStart: {
+                            selectedDetailDefinition = nil
+                            exercisingDefinition = def
                         }
                     )
-
-                    // Lista da rotina com status real de completude e navegação individual
-                    routineListWithNavigation
-
-                    TipCardView(tip: TipItem(
-                        title: "Tip of the day",
-                        text: tipService.currentMessage
-                    ))
-
-                    // ── DEBUG: Remover antes do release ──────────────────
-                    Button { showDebugCamera = true } label: {
-                        Label("Debug: testar câmera", systemImage: "camera.metering.unknown")
-                            .font(.caption)
-                            .foregroundColor(WendTheme.Colors.coffee.opacity(0.35))
-                    }
-                    .frame(maxWidth: .infinity)
-                    .padding(.bottom, 4)
-                    // ────────────────────────────────────────────────────
-                }
-                .padding(.horizontal, 20)
-                .padding(.bottom, 100)
-            }
-
-            CustomTabBarView(selectedTab: $selectedTab)
-                .padding(.bottom, 12)
-        }
-        .fullScreenCover(isPresented: $showDebugCamera) {
-            PoseTestView()
-        }
-        .sheet(isPresented: $showRoutineSheet) {
-            TodayRoutineView(
-                definitions: StretchDefinition.sampleStretches,
-                completedIDs: completedIDsToday,
-                onStartExercise: { def in
-                    exercisingDefinition = def
-                }
-            )
-        }
-        .sheet(item: $selectedDetailDefinition) { def in
-            NavigationStack {
-                ExerciseDetailView(
-                    definition: def,
-                    isCompleted: completedIDsToday.contains(def.id),
-                    onStart: {
-                        selectedDetailDefinition = nil
-                        exercisingDefinition = def
-                    }
-                )
-                .toolbar {
-                    ToolbarItem(placement: .navigationBarTrailing) {
-                        Button {
-                            selectedDetailDefinition = nil
-                        } label: {
-                            Image(systemName: "xmark.circle.fill")
-                                .font(.system(size: 22))
-                                .foregroundStyle(
-                                    WendTheme.Colors.coffee.opacity(0.4),
-                                    WendTheme.Colors.coffee.opacity(0.08)
-                                )
+                    .toolbar {
+                        ToolbarItem(placement: .navigationBarTrailing) {
+                            Button {
+                                selectedDetailDefinition = nil
+                            } label: {
+                                Image(systemName: "xmark.circle.fill")
+                                    .font(.system(size: 22))
+                                    .foregroundStyle(
+                                        WendTheme.Colors.coffee.opacity(0.4),
+                                        WendTheme.Colors.coffee.opacity(0.08)
+                                    )
+                            }
                         }
                     }
                 }
             }
-        }
-        .sheet(item: $pendingSession) { pending in
-            SessionSummaryView(record: pending.record, definition: pending.definition)
-        }
-        // Dispara refresh da dica quando os records ou o streak mudam.
-        .task(id: allRecords.count) {
-            await tipService.refreshIfNeeded(
-                context: modelContext,
-                records: allRecords,
-                streak: store.streakDays
-            )
-        }
-        .navigationDestination(item: $exercisingDefinition) { def in
-            ExercisingView(definition: def)
-        }
+            .sheet(isPresented: $showAddExerciseSheet) {
+                addExerciseSheet
+            }
+            .sheet(item: $pendingSession) { pending in
+                SessionSummaryView(record: pending.record, definition: pending.definition)
+            }
+            .task(id: allRecords.count) {
+                let store = SessionStore(records: allRecords)
+                await tipService.refreshIfNeeded(
+                    context: modelContext,
+                    records: allRecords,
+                    streak: store.streakDays
+                )
+            }
+            .navigationDestination(item: $exercisingDefinition) { def in
+                ExercisingView(
+                    definition: def,
+                    stretches: activeStretches
+                )
+            }
         } // NavigationStack
     }
 
-    // MARK: - Routine List with Per-Row Navigation
+    // MARK: - Routine List Section
 
-    /// Lista da rotina onde cada row abre o ExerciseDetailView individual.
-    private var routineListWithNavigation: some View {
+    private var routineListSection: some View {
         VStack(alignment: .leading, spacing: 14) {
-            Text("Today's routine")
-                .font(.system(size: 20, weight: .bold))
-                .foregroundColor(WendTheme.Colors.coffee)
+            HStack {
+                Text("Today's routine")
+                    .font(.system(size: 20, weight: .bold))
+                    .foregroundColor(WendTheme.Colors.coffee)
+
+                Spacer()
+
+                if !routineManager.removedStretches.isEmpty {
+                    Button {
+                        showAddExerciseSheet = true
+                    } label: {
+                        HStack(spacing: 4) {
+                            Image(systemName: "plus.circle.fill")
+                                .font(.system(size: 14, weight: .bold))
+                            Text("Add")
+                                .font(.system(size: 14, weight: .bold))
+                        }
+                        .foregroundColor(WendTheme.Colors.greenBasic)
+                        .padding(.horizontal, 10)
+                        .padding(.vertical, 4)
+                        .background(WendTheme.Colors.greenLight)
+                        .clipShape(Capsule())
+                    }
+                }
+            }
 
             VStack(spacing: 0) {
-                let items = store.routineItems
-                ForEach(Array(items.enumerated()), id: \.element.id) { index, item in
-                    // Encontra a StretchDefinition correspondente pelo título
-                    let def = StretchDefinition.sampleStretches.first { $0.name == item.title }
+                if activeStretches.isEmpty {
+                    emptyRoutineView
+                } else {
+                    ForEach(Array(activeStretches.enumerated()), id: \.element.id) { index, def in
+                        routineRow(for: def, index: index)
 
-                    Button {
-                        if let def { selectedDetailDefinition = def }
-                    } label: {
-                        RoutineRowView(item: item)
-                            .contentShape(Rectangle())
+                        if index < activeStretches.count - 1 || !routineManager.removedStretches.isEmpty {
+                            Divider()
+                                .background(WendTheme.Colors.coffee.opacity(0.1))
+                                .padding(.leading, 40)
+                        }
                     }
-                    .buttonStyle(PlainButtonStyle())
-                    .disabled(def == nil)
+                }
 
-                    if index < items.count - 1 {
-                        Divider()
-                            .background(WendTheme.Colors.coffee.opacity(0.1))
-                            .padding(.leading, 40)
-                    }
+                // Botão de adicionar exercício no rodapé da lista
+                if !routineManager.removedStretches.isEmpty {
+                    addExerciseRowButton
                 }
             }
             .padding(.horizontal, 16)
@@ -212,28 +236,163 @@ struct HomeView: View {
         }
     }
 
-    // MARK: - Helpers de UI
+    private func routineRow(for def: StretchDefinition, index: Int) -> some View {
+        let isDone = completedIDsToday.contains(def.id)
+        let item = RoutineItem(
+            title: def.name,
+            detail: routineManager.detailText(for: def),
+            isCompleted: isDone
+        )
 
-    /// Duração total estimada da rotina (soma de holdDuration × 3 reps de cada exercício).
+        return Button {
+            selectedDetailDefinition = def
+        } label: {
+            RoutineRowView(item: item)
+                .contentShape(Rectangle())
+        }
+        .buttonStyle(PlainButtonStyle())
+        .swipeActions(edge: .trailing, allowsFullSwipe: true) {
+            Button(role: .destructive) {
+                withAnimation {
+                    routineManager.excludeExercise(def.id)
+                }
+            } label: {
+                Label("Delete", systemImage: "trash.fill")
+            }
+        }
+        .swipeActions(edge: .leading, allowsFullSwipe: false) {
+            Button {
+                selectedDetailDefinition = def
+            } label: {
+                Label("Edit", systemImage: "slider.horizontal.3")
+            }
+            .tint(WendTheme.Colors.greenBasic)
+        }
+    }
+
+    private var addExerciseRowButton: some View {
+        Button {
+            showAddExerciseSheet = true
+        } label: {
+            HStack(spacing: 12) {
+                Image(systemName: "plus.circle.fill")
+                    .font(.system(size: 24, weight: .semibold))
+                    .foregroundColor(WendTheme.Colors.greenBasic)
+
+                Text("Add exercise back")
+                    .font(.system(size: 15, weight: .semibold))
+                    .foregroundColor(WendTheme.Colors.greenDark)
+
+                Spacer()
+            }
+            .padding(.vertical, 12)
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(PlainButtonStyle())
+    }
+
+    private var emptyRoutineView: some View {
+        VStack(spacing: 8) {
+            Text("No exercises in today's routine")
+                .font(.system(size: 15, weight: .semibold))
+                .foregroundColor(WendTheme.Colors.coffee.opacity(0.6))
+
+            Button("Restore default exercises") {
+                withAnimation {
+                    routineManager.resetToDefaults()
+                }
+            }
+            .font(.system(size: 14, weight: .bold))
+            .foregroundColor(WendTheme.Colors.greenBasic)
+        }
+        .padding(.vertical, 20)
+        .frame(maxWidth: .infinity)
+    }
+
+    // MARK: - Add Exercise Sheet
+
+    private var addExerciseSheet: some View {
+        NavigationStack {
+            ZStack {
+                WendTheme.Colors.creamBasic.ignoresSafeArea()
+
+                List {
+                    Section {
+                        ForEach(routineManager.removedStretches) { def in
+                            Button {
+                                withAnimation {
+                                    routineManager.restoreExercise(def.id)
+                                }
+                                if routineManager.removedStretches.isEmpty {
+                                    showAddExerciseSheet = false
+                                }
+                            } label: {
+                                HStack(spacing: 14) {
+                                    Image(systemName: "plus.circle.fill")
+                                        .font(.system(size: 22, weight: .semibold))
+                                        .foregroundColor(WendTheme.Colors.greenBasic)
+
+                                    VStack(alignment: .leading, spacing: 2) {
+                                        Text(def.name)
+                                            .font(.system(size: 16, weight: .semibold))
+                                            .foregroundColor(WendTheme.Colors.coffee)
+
+                                        Text(routineManager.detailText(for: def))
+                                            .font(.system(size: 13))
+                                            .foregroundColor(WendTheme.Colors.coffee.opacity(0.6))
+                                    }
+
+                                    Spacer()
+                                }
+                                .padding(.vertical, 4)
+                            }
+                        }
+                    } footer: {
+                        Text("Tap an exercise to add it back into your daily routine.")
+                    }
+                }
+                .scrollContentBackground(.hidden)
+            }
+            .navigationTitle("Add Exercise")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .navigationBarTrailing) {
+                    Button("Done") {
+                        showAddExerciseSheet = false
+                    }
+                    .font(.system(size: 16, weight: .bold))
+                    .foregroundColor(WendTheme.Colors.greenDark)
+                }
+            }
+        }
+    }
+
+    // MARK: - Actions & Helpers
+
+    private func startRoutineSession() {
+        guard let first = activeStretches.first else { return }
+        exercisingDefinition = first
+    }
+
     private var totalDurationLabel: String {
-        let totalSecs = StretchDefinition.sampleStretches.reduce(0.0) { $0 + $1.holdDuration * 3 }
+        let totalSecs = activeStretches.reduce(0.0) { sum, stretch in
+            sum + routineManager.holdDuration(for: stretch) * Double(routineManager.targetReps(for: stretch))
+        }
         let mins = Int(totalSecs) / 60
         return mins > 0 ? "\(mins) min" : "\(Int(totalSecs)) sec"
     }
 
-    // MARK: - Persistência de Sessão
-
-    /// Salva um `SessionRecord` no ModelContext e aciona a exibição do resumo.
     func saveSessionRecord(
         for stretch: StretchDefinition,
         holdDurationAchieved: TimeInterval,
         withinRangePercentage: Double
     ) {
+        let customReps = routineManager.targetReps(for: stretch)
         let record = SessionRecord(
             date: Date(),
             exerciseID: stretch.id,
             holdDurationAchieved: holdDurationAchieved,
-            targetHoldDuration: stretch.holdDuration * 3,
+            targetHoldDuration: stretch.holdDuration * Double(customReps),
             withinRangePercentage: withinRangePercentage
         )
         modelContext.insert(record)
@@ -247,5 +406,3 @@ struct HomeView: View {
     HomeView()
         .modelContainer(for: [SessionRecord.self, UserProfile.self, DailyTipCache.self], inMemory: true)
 }
-
-

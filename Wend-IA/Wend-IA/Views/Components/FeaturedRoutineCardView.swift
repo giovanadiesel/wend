@@ -1,29 +1,25 @@
 import SwiftUI
 import UIKit
 
-/// Card em destaque da rotina "Morning Stretch" com banner, badge e botão de abertura da rotina.
+/// Card em destaque da rotina "Morning Stretch" com banner, badge e botão de Start.
 public struct FeaturedRoutineCardView: View {
     public var title: String
     public var description: String
     public var durationText: String
-    /// Número de exercícios na rotina (para mostrar no badge).
-    public var exerciseCount: Int
-    public var onViewRoutine: () -> Void
-    
+    public var onStart: () -> Void
+
     public init(
         title: String = "Morning Stretch",
         description: String = "Wake up your body with gentle movements focused on the lower back.",
         durationText: String = "10 min",
-        exerciseCount: Int = 5,
-        onViewRoutine: @escaping () -> Void = {}
+        onStart: @escaping () -> Void = {}
     ) {
         self.title = title
         self.description = description
         self.durationText = durationText
-        self.exerciseCount = exerciseCount
-        self.onViewRoutine = onViewRoutine
+        self.onStart = onStart
     }
-    
+
     public var body: some View {
         VStack(spacing: 0) {
             // Top Banner Image Section
@@ -31,13 +27,13 @@ public struct FeaturedRoutineCardView: View {
                 bannerImageView
                     .frame(height: 180)
                     .clipped()
-                
+
                 // Tag "10 min": Fundo Cream Light, Ícone Green Basic, Texto Coffee
                 HStack(spacing: 5) {
                     Image(systemName: WendSymbols.durationClock)
                         .font(.system(size: 13, weight: .semibold))
                         .foregroundColor(WendTheme.Colors.greenBasic)
-                    
+
                     Text(durationText)
                         .font(.system(size: 13, weight: .semibold))
                         .foregroundColor(WendTheme.Colors.coffee)
@@ -49,25 +45,25 @@ public struct FeaturedRoutineCardView: View {
                 .shadow(color: Color.black.opacity(0.04), radius: 4, x: 0, y: 2)
                 .padding(14)
             }
-            
+
             // Bottom Info & Button Section
             VStack(alignment: .leading, spacing: 14) {
                 VStack(alignment: .leading, spacing: 6) {
                     Text(title)
                         .font(.system(size: 20, weight: .bold))
                         .foregroundColor(WendTheme.Colors.coffee)
-                    
+
                     Text(description)
                         .font(.system(size: 14, weight: .regular))
                         .foregroundColor(WendTheme.Colors.coffee.opacity(0.85))
                         .lineSpacing(2)
                 }
-                
-                Button(action: onViewRoutine) {
+
+                Button(action: onStart) {
                     HStack(spacing: 8) {
-                        Image(systemName: "list.bullet.rectangle")
+                        Image(systemName: WendSymbols.playStart)
                             .font(.system(size: 14, weight: .bold))
-                        Text("View Routine · \(exerciseCount) exercises")
+                        Text("Start")
                             .font(.system(size: 16, weight: .bold))
                     }
                     .foregroundColor(WendTheme.Colors.creamLight)
@@ -77,7 +73,6 @@ public struct FeaturedRoutineCardView: View {
                     .clipShape(Capsule())
                 }
                 .buttonStyle(PlainButtonStyle())
-
             }
             .padding(18)
             .background(WendTheme.Colors.greenLight)

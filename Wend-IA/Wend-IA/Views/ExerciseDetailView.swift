@@ -20,6 +20,8 @@ struct ExerciseDetailView: View {
 
     @Environment(\.dismiss) private var dismiss
 
+    @State private var routineManager = RoutineManager.shared
+
     // MARK: - Body
 
     var body: some View {
@@ -64,6 +66,9 @@ struct ExerciseDetailView: View {
                             }
                         }
 
+                        // Editar metas do exercício
+                        customizationBlock
+
                         // Stats rápidos
                         statsRow
 
@@ -93,6 +98,106 @@ struct ExerciseDetailView: View {
         .navigationBarTitleDisplayMode(.inline)
         .toolbarBackground(WendTheme.Colors.creamBasic, for: .navigationBar)
         .toolbarBackground(.visible, for: .navigationBar)
+    }
+
+    // MARK: - Customization Block
+
+    private var customizationBlock: some View {
+        sectionBlock(
+            icon: "slider.horizontal.3",
+            title: "Customized target",
+            color: WendTheme.Colors.greenDark
+        ) {
+            VStack(spacing: 14) {
+                // Hold Duration Stepper
+                HStack {
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text("Hold duration")
+                            .font(.system(size: 14, weight: .semibold))
+                            .foregroundColor(WendTheme.Colors.coffee)
+                        Text("\(Int(currentHoldDuration)) seconds per rep")
+                            .font(.system(size: 12))
+                            .foregroundColor(WendTheme.Colors.coffee.opacity(0.6))
+                    }
+                    Spacer()
+                    Stepper(
+                        value: Binding(
+                            get: { currentHoldDuration },
+                            set: { routineManager.updateHoldDuration($0, for: definition.id) }
+                        ),
+                        in: 5...120,
+                        step: 5
+                    ) {
+                        Text("\(Int(currentHoldDuration))s")
+                            .font(.system(size: 15, weight: .bold))
+                            .foregroundColor(WendTheme.Colors.greenDark)
+                    }
+                    .labelsHidden()
+                }
+
+                Divider()
+
+                // Repetitions Stepper
+                HStack {
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text("Target repetitions")
+                            .font(.system(size: 14, weight: .semibold))
+                            .foregroundColor(WendTheme.Colors.coffee)
+                        Text("\(currentReps) reps per session")
+                            .font(.system(size: 12))
+                            .foregroundColor(WendTheme.Colors.coffee.opacity(0.6))
+                    }
+                    Spacer()
+                    Stepper(
+                        value: Binding(
+                            get: { currentReps },
+                            set: { routineManager.updateTargetReps($0, for: definition.id) }
+                        ),
+                        in: 1...10
+                    ) {
+                        Text("\(currentReps)×")
+                            .font(.system(size: 15, weight: .bold))
+                            .foregroundColor(WendTheme.Colors.greenDark)
+                    }
+                    .labelsHidden()
+                }
+            }
+        }
+    }
+
+    // MARK: - Stats Row
+
+    private var statsRow: some View {
+        HStack(spacing: 12) {
+            statCell(
+                label: "Hold time",
+                value: "\(Int(currentHoldDuration))s",
+                icon: "clock.fill",
+                color: WendTheme.Colors.greenBasic
+            )
+            statCell(
+                label: "Tracking",
+                value: definition.targetJoints.isEmpty ? "Timer" : "Camera",
+                icon: definition.targetJoints.isEmpty ? "timer" : "camera.fill",
+                color: WendTheme.Colors.greenBasic
+            )
+            statCell(
+                label: "Reps",
+                value: "\(currentReps)×",
+                icon: "arrow.counterclockwise",
+                color: WendTheme.Colors.greenBasic
+            )
+        }
+    }
+
+    // MARK: - Computed Properties
+
+    private var currentHoldDuration: Double {
+        routineManager.holdDuration(for: definition)
+    }
+
+    private var currentReps: Int {
+        routineManager.targetReps(for: definition)
     }
 
     // MARK: - Banner Section
@@ -165,8 +270,6 @@ struct ExerciseDetailView: View {
         .clipShape(Capsule())
     }
 
-    // MARK: - Section Block
-
     private func sectionBlock<Content: View>(
         icon: String,
         title: String,
@@ -188,31 +291,6 @@ struct ExerciseDetailView: View {
         .frame(maxWidth: .infinity, alignment: .leading)
         .background(WendTheme.Colors.creamLight)
         .clipShape(RoundedRectangle(cornerRadius: 20, style: .continuous))
-    }
-
-    // MARK: - Stats Row
-
-    private var statsRow: some View {
-        HStack(spacing: 12) {
-            statCell(
-                label: "Hold time",
-                value: holdLabel,
-                icon: "clock.fill",
-                color: WendTheme.Colors.greenBasic
-            )
-            statCell(
-                label: "Tracking",
-                value: definition.targetJoints.isEmpty ? "Timer" : "Camera",
-                icon: definition.targetJoints.isEmpty ? "timer" : "camera.fill",
-                color: WendTheme.Colors.greenBasic
-            )
-            statCell(
-                label: "Reps",
-                value: "3×",
-                icon: "arrow.counterclockwise",
-                color: WendTheme.Colors.greenBasic
-            )
-        }
     }
 
     private func statCell(label: String, value: String, icon: String, color: Color) -> some View {
