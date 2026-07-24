@@ -34,13 +34,21 @@ public struct StretchDefinition: Identifiable, Hashable, Sendable {
 // MARK: - Sample Data
 
 extension StretchDefinition {
-    /// Exercícios de calibração — ajuste os `acceptableRange` após observar os
-    /// ângulos reais na `PoseTestView` enquanto executa cada movimento.
+    /// Exercícios do plano diário — `acceptableRange` calibrado via `VideoAngleAnalyzerScript`
+    /// sobre vídeos de referência (P10–P90 observado, conf ≥ 0.3).
+    ///
+    /// Fonte: análise de 15 vídeos em 5 pastas (3 por exercício).
+    /// Data de calibração: 2026-07-24.
     static let sampleStretches: [StretchDefinition] = [
 
         // ── 1. Cat Camel ────────────────────────────────────────────────────────
-        // Foco: flexão/extensão da coluna. Avalia o ângulo formado entre ombro,
-        // quadril e joelho no plano lateral para checar o arco do movimento.
+        // Foco: flexão/extensão da coluna. Avalia o ângulo ombro–quadril–joelho
+        // no plano lateral (vista de lado) para confirmar o arco de movimento.
+        //
+        // Dados observados (conf ≥ 0.3):
+        //   How to do the cat camel.mp4  → P10–P90: 111°–123° (260 frames válidos)
+        //   video_1280x720-2.mp4         → P10–P90: 112°–126° (151 frames válidos)
+        //   Consenso: 110°–135° (inclui fase de extensão máxima ~135°)
         StretchDefinition(
             id: "cat-camel",
             name: "Cat Camel",
@@ -51,21 +59,27 @@ extension StretchDefinition {
             """,
             holdDuration: 5,
             targetJoints: [
-                // Ombro direito → Quadril direito (vértice) → Joelho direito
-                // Avalia o arco lateral do tronco durante o movimento
+                // rightShoulder → rightHip (vértice) → rightKnee
+                // Faixa calibrada: P10–P90 de 2 vídeos com boa detecção
                 JointAngleRule(
                     jointA: .rightShoulder,
                     jointB: .rightHip,
                     jointC: .rightKnee,
-                    acceptableRange: 70.0...110.0, // TODO: ajustar com valores observados na PoseTestView
-                    mistakeHint: "Amplie o movimento: o arco do tronco está insuficiente."
+                    acceptableRange: 110.0...135.0,
+                    mistakeHint: "Amplie o movimento — o arco do tronco está insuficiente."
                 ),
             ]
         ),
 
         // ── 2. Bridge Pose ──────────────────────────────────────────────────────
-        // Foco: extensão de quadril com ativação de glúteo. Avalia o ângulo do
-        // joelho (a perna deve formar ~90° com o chão) e o alinhamento do tronco.
+        // Foco: extensão do quadril com ativação de glúteo.
+        // Exercício supino — Vision detecta melhor a flexão do joelho antes do lift.
+        //
+        // Dados observados (conf ≥ 0.3):
+        //   video_1280x720-2.mp4 → P10–P90: 38°–52° (167 frames) — fase de setup
+        //   bridge pose yoga.mp4 → P10–P90: 27°–66° (257 frames) — inclui subida/descida
+        //   Nota: ângulo no hold (quadril elevado, joelho ~90°) não capturado nos vídeos.
+        //   Faixa estimada para hold: 80°–110° (validar na PoseTestView ao vivo).
         StretchDefinition(
             id: "bridge-pose",
             name: "Bridge Pose",
@@ -76,50 +90,112 @@ extension StretchDefinition {
             """,
             holdDuration: 15,
             targetJoints: [
-                // Quadril direito → Joelho direito (vértice) → Tornozelo direito
-                // Verifica que o joelho está a ~90° (perna vertical ao chão)
+                // rightHip → rightKnee (vértice) → rightAnkle
+                // Faixa estimada para posição de hold (joelho ~90°)
+                // TODO: validar na PoseTestView — exercício supino dificulta calibração por vídeo
                 JointAngleRule(
                     jointA: .rightHip,
                     jointB: .rightKnee,
                     jointC: .rightAnkle,
-                    acceptableRange: 70.0...110.0, // TODO: ajustar com valores observados na PoseTestView
-                    mistakeHint: "Ajuste a posição dos pés: o joelho deve estar a 90° do chão."
-                ),
-                // Ombro direito → Quadril direito (vértice) → Joelho direito
-                // Verifica que o tronco está elevado e alinhado (linha ombro-quadril-joelho)
-                JointAngleRule(
-                    jointA: .rightShoulder,
-                    jointB: .rightHip,
-                    jointC: .rightKnee,
-                    acceptableRange: 70.0...110.0, // TODO: ajustar com valores observados na PoseTestView
-                    mistakeHint: "Eleve mais o quadril para alinhar com ombros e joelhos."
+                    acceptableRange: 80.0...110.0,
+                    mistakeHint: "Ajuste os pés — o joelho deve formar ~90° com o chão."
                 ),
             ]
         ),
 
-        // ── 3. Piriformis Stretch ───────────────────────────────────────────────
+        // ── 3. Seated Spinal Twist ──────────────────────────────────────────────
+        // Foco: rotação do tronco. Avalia o ângulo formado entre ombro esquerdo,
+        // ombro direito (vértice) e quadril direito — mede o twist lateral.
+        //
+        // Dados observados (conf ≥ 0.3):
+        //   Seated Spinal Twist - CORE.mp4 → P10–P90: 86°–127° (736/792 frames — excelente)
+        //   Seated Spinal Twist.mp4        → P10–P90: 91°–93°  (152 frames — posição neutra)
+        //   video_1280x720-2.mp4           → P10–P90: 79°–85°  (120/120 frames — fase inicial)
+        //   Consenso: faixa de rotação ativa é 80°–130°
+        StretchDefinition(
+            id: "seated-spinal-twist",
+            name: "Seated Spinal Twist",
+            instructions: """
+            Sente-se com as pernas estendidas. Cruze o joelho direito dobrado sobre a \
+            perna esquerda. Coloque o cotovelo esquerdo fora do joelho direito e gire \
+            o tronco para a direita. Mantenha a coluna ereta durante o twist.
+            """,
+            holdDuration: 20,
+            targetJoints: [
+                // leftShoulder → rightShoulder (vértice) → rightHip
+                // Faixa calibrada: cobre posição neutra (80°) até twist completo (130°)
+                JointAngleRule(
+                    jointA: .leftShoulder,
+                    jointB: .rightShoulder,
+                    jointC: .rightHip,
+                    acceptableRange: 80.0...130.0,
+                    mistakeHint: "Gire mais o tronco — mantenha o quadril estável e o ombro afastado do quadril."
+                ),
+            ]
+        ),
+
+        // ── 4. Seated Piriformis Stretch ────────────────────────────────────────
         // Foco: rotação externa do quadril, alongando o músculo piriforme.
-        // Avalia o ângulo do joelho cruzado sobre a coxa (posição de "4").
+        // Avalia o ângulo joelho direito–quadril direito (vértice)–joelho esquerdo.
+        //
+        // Dados observados (conf ≥ 0.3):
+        //   Seated Piriformis Stretch.mp4 → P10–P90: 65°–120° (211/319 frames)
+        //   MedBridge.mp4                 → P10–P90: 29°–114° (165/311 frames — inclui cruzamento)
+        //   Consenso: posição de hold ativo ≈ 65°–120°
         StretchDefinition(
             id: "piriformis-stretch",
             name: "Piriformis Stretch",
             instructions: """
-            Deite de costas. Cruze o tornozelo direito sobre o joelho esquerdo \
-            formando o número 4. Puxe a coxa esquerda em direção ao peito. \
-            Sinta o alongamento no glúteo direito. Troque o lado após o tempo.
+            Sente-se em uma cadeira. Cruze o tornozelo direito sobre o joelho esquerdo \
+            formando o número 4. Incline levemente o tronco para frente mantendo as \
+            costas retas. Sinta o alongamento no glúteo direito. Troque o lado após o tempo.
             """,
             holdDuration: 30,
             targetJoints: [
-                // Joelho direito → Quadril direito (vértice) → Tornozelo esquerdo
-                // Avalia a abertura do quadril: quanto mais aberto, maior o ângulo
+                // rightKnee → rightHip (vértice) → leftKnee
+                // Faixa calibrada: P10–P90 do vídeo com detecção mais consistente
                 JointAngleRule(
                     jointA: .rightKnee,
                     jointB: .rightHip,
-                    jointC: .leftAnkle,
-                    acceptableRange: 70.0...110.0, // TODO: ajustar com valores observados na PoseTestView
-                    mistakeHint: "Puxe mais a coxa: o quadril não está suficientemente aberto."
+                    jointC: .leftKnee,
+                    acceptableRange: 60.0...120.0,
+                    mistakeHint: "Incline o tronco para frente — isso aprofunda o alongamento do piriforme."
+                ),
+            ]
+        ),
+
+        // ── 5. Lumbar Rotation ──────────────────────────────────────────────────
+        // Foco: rotação lombar no plano horizontal. Vídeos disponíveis mostram
+        // exercício supino (swiss ball) onde a câmera lateral não detecta os pontos.
+        //
+        // Dados observados: 0 frames válidos em todos os 3 vídeos (posição supina).
+        // Faixa estimada com base na anatomia: rotação lombar saudável ~40°–60°
+        // por lado → ângulo total ombro–ombro–quadril ≈ 60°–100°.
+        // TODO: validar na PoseTestView com exercício feito de pé ou sentado.
+        StretchDefinition(
+            id: "lumbar-rotation",
+            name: "Lumbar Rotation",
+            instructions: """
+            Deite de costas com os joelhos dobrados e os pés no chão. \
+            Mantenha os ombros no chão e deixe os joelhos caírem lentamente \
+            para um lado. Segure a posição e volte ao centro antes de trocar.
+            """,
+            holdDuration: 20,
+            targetJoints: [
+                // leftShoulder → rightShoulder (vértice) → rightHip
+                // Faixa estimada — vídeos supinos não geraram dados confiáveis.
+                // TODO: recalibrar com vídeo lateral do exercício ou PoseTestView.
+                JointAngleRule(
+                    jointA: .leftShoulder,
+                    jointB: .rightShoulder,
+                    jointC: .rightHip,
+                    acceptableRange: 60.0...100.0,
+                    mistakeHint: "Mantenha os ombros no chão enquanto os joelhos giram para o lado."
                 ),
             ]
         ),
     ]
 }
+
+
+
