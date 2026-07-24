@@ -1,13 +1,12 @@
 import SwiftData
 import SwiftUI
 
-
 // MARK: - ExerciseDetailView
 
 /// Tela de detalhe individual de um exercício, exibida ao tocar em uma row da rotina.
 ///
-/// Mostra a descrição completa, dicas de respiração, duração estimada e o botão
-/// para iniciar a sessão de rastreio via `ExercisingView`.
+/// Mostra a descrição completa, dicas de respiração, ajuste de parâmetros (hold & reps)
+/// e o botão para iniciar a sessão deste exercício individualmente.
 struct ExerciseDetailView: View {
 
     // MARK: - Parâmetros
@@ -109,44 +108,6 @@ struct ExerciseDetailView: View {
             color: WendTheme.Colors.greenDark
         ) {
             VStack(spacing: 14) {
-                // Time of Day Selector
-                HStack {
-                    VStack(alignment: .leading, spacing: 2) {
-                        Text("Routine period")
-                            .font(.system(size: 14, weight: .semibold))
-                            .foregroundColor(WendTheme.Colors.coffee)
-                        Text("Schedule for morning or evening")
-                            .font(.system(size: 12))
-                            .foregroundColor(WendTheme.Colors.coffee.opacity(0.6))
-                    }
-                    Spacer()
-                    HStack(spacing: 6) {
-                        ForEach(RoutineTimeOfDay.allCases) { tod in
-                            let isSelected = currentTimeOfDay == tod
-                            Button {
-                                withAnimation(.easeInOut(duration: 0.2)) {
-                                    routineManager.updateTimeOfDay(tod, for: definition.id)
-                                }
-                            } label: {
-                                HStack(spacing: 4) {
-                                    Image(systemName: tod.iconSymbol)
-                                        .font(.system(size: 12, weight: .semibold))
-                                    Text(tod.rawValue)
-                                        .font(.system(size: 13, weight: .bold))
-                                }
-                                .padding(.horizontal, 10)
-                                .padding(.vertical, 6)
-                                .foregroundColor(isSelected ? WendTheme.Colors.creamLight : WendTheme.Colors.coffee)
-                                .background(isSelected ? (tod == .morning ? WendTheme.Colors.greenDark : Color(hex: "#3D3860")) : WendTheme.Colors.creamBasic)
-                                .clipShape(Capsule())
-                            }
-                            .buttonStyle(PlainButtonStyle())
-                        }
-                    }
-                }
-
-                Divider()
-
                 // Hold Duration Stepper
                 HStack {
                     VStack(alignment: .leading, spacing: 2) {
@@ -228,6 +189,69 @@ struct ExerciseDetailView: View {
         }
     }
 
+    private func statCell(label: String, value: String, icon: String, color: Color) -> some View {
+        VStack(spacing: 6) {
+            Image(systemName: icon)
+                .font(.system(size: 18, weight: .medium))
+                .foregroundColor(color)
+            Text(value)
+                .font(.system(size: 16, weight: .bold))
+                .foregroundColor(WendTheme.Colors.coffee)
+            Text(label)
+                .font(.system(size: 11, weight: .medium))
+                .foregroundColor(WendTheme.Colors.coffee.opacity(0.5))
+                .textCase(.uppercase)
+                .kerning(0.5)
+        }
+        .frame(maxWidth: .infinity)
+        .padding(.vertical, 14)
+        .background(WendTheme.Colors.creamLight)
+        .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
+    }
+
+    // MARK: - Start Button
+
+    private var startButton: some View {
+        Button(action: onStart) {
+            HStack(spacing: 10) {
+                Image(systemName: isCompleted ? "arrow.clockwise" : "play.fill")
+                    .font(.system(size: 15, weight: .bold))
+                Text(isCompleted ? "Do it again" : "Start exercise")
+                    .font(.system(size: 17, weight: .bold))
+            }
+            .foregroundColor(WendTheme.Colors.creamLight)
+            .frame(maxWidth: .infinity, minHeight: 54)
+            .background(WendTheme.Colors.greenDark)
+            .clipShape(Capsule())
+        }
+        .buttonStyle(PlainButtonStyle())
+    }
+
+    // MARK: - Section Block Helper
+
+    private func sectionBlock<Content: View>(
+        icon: String,
+        title: String,
+        color: Color,
+        @ViewBuilder content: () -> Content
+    ) -> some View {
+        VStack(alignment: .leading, spacing: 12) {
+            HStack(spacing: 8) {
+                Image(systemName: icon)
+                    .font(.system(size: 15, weight: .semibold))
+                    .foregroundColor(color)
+                Text(title)
+                    .font(.system(size: 16, weight: .bold))
+                    .foregroundColor(WendTheme.Colors.coffee)
+            }
+            content()
+        }
+        .padding(16)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(WendTheme.Colors.creamLight)
+        .clipShape(RoundedRectangle(cornerRadius: 20, style: .continuous))
+    }
+
     // MARK: - Computed Properties
 
     private var currentHoldDuration: Double {
@@ -238,35 +262,36 @@ struct ExerciseDetailView: View {
         routineManager.targetReps(for: definition)
     }
 
-    private var currentTimeOfDay: RoutineTimeOfDay {
-        routineManager.timeOfDay(for: definition)
+    private var holdLabel: String {
+        let secs = Int(currentHoldDuration)
+        return secs >= 60 ? "\(secs / 60) min" : "\(secs)s"
     }
 
-    // MARK: - Banner Section
+    private var bannerColors: [Color] {
+        switch definition.id {
+        case "cat-camel":
+            return [Color(hex: "#8CB4A0"), Color(hex: "#5A8A72")]
+        case "bridge-pose":
+            return [Color(hex: "#A0B4D4"), Color(hex: "#6A8AB4")]
+        case "seated-spinal-twist":
+            return [Color(hex: "#C4A882"), Color(hex: "#A07850")]
+        case "piriformis-stretch":
+            return [Color(hex: "#B4A0C4"), Color(hex: "#8A70A0")]
+        case "lumbar-rotation":
+            return [Color(hex: "#A0C4B4"), Color(hex: "#5A8A7A")]
+        default:
+            return [WendTheme.Colors.greenLight, WendTheme.Colors.greenBasic]
+        }
+    }
 
-    private var bannerSection: some View {
-        ZStack(alignment: .bottomLeading) {
-            // Gradiente de cor por exercício
-            LinearGradient(
-                colors: bannerColors,
-                startPoint: .topLeading,
-                endPoint: .bottomTrailing
-            )
-            .frame(height: 200)
-
-            // Ícone grande centralizado
-            Image(systemName: bannerIcon)
-                .font(.system(size: 72, weight: .thin))
-                .foregroundColor(.white.opacity(0.25))
-                .frame(maxWidth: .infinity)
-
-            // Badges no canto inferior esquerdo
-            HStack(spacing: 8) {
-                durationBadge
-                if isCompleted { completedBadge }
-                if definition.targetJoints.isEmpty { timerBadge }
-            }
-            .padding(16)
+    private var bannerIcon: String {
+        switch definition.id {
+        case "cat-camel":          return "figure.flexibility"
+        case "bridge-pose":        return "figure.yoga"
+        case "seated-spinal-twist": return "figure.mind.and.body"
+        case "piriformis-stretch": return "figure.seated.seatbelt"
+        case "lumbar-rotation":    return "figure.roll"
+        default:                   return "figure.flexibility"
         }
     }
 
@@ -312,104 +337,29 @@ struct ExerciseDetailView: View {
         .clipShape(Capsule())
     }
 
-    private func sectionBlock<Content: View>(
-        icon: String,
-        title: String,
-        color: Color,
-        @ViewBuilder content: () -> Content
-    ) -> some View {
-        VStack(alignment: .leading, spacing: 12) {
+    private var bannerSection: some View {
+        ZStack(alignment: .bottomLeading) {
+            LinearGradient(
+                colors: bannerColors,
+                startPoint: .topLeading,
+                endPoint: .bottomTrailing
+            )
+            .frame(height: 200)
+
+            Image(systemName: bannerIcon)
+                .font(.system(size: 72, weight: .thin))
+                .foregroundColor(.white.opacity(0.25))
+                .frame(maxWidth: .infinity)
+
             HStack(spacing: 8) {
-                Image(systemName: icon)
-                    .font(.system(size: 15, weight: .semibold))
-                    .foregroundColor(color)
-                Text(title)
-                    .font(.system(size: 16, weight: .bold))
-                    .foregroundColor(WendTheme.Colors.coffee)
+                durationBadge
+                if isCompleted { completedBadge }
+                if definition.targetJoints.isEmpty { timerBadge }
             }
-            content()
-        }
-        .padding(16)
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .background(WendTheme.Colors.creamLight)
-        .clipShape(RoundedRectangle(cornerRadius: 20, style: .continuous))
-    }
-
-    private func statCell(label: String, value: String, icon: String, color: Color) -> some View {
-        VStack(spacing: 6) {
-            Image(systemName: icon)
-                .font(.system(size: 18, weight: .medium))
-                .foregroundColor(color)
-            Text(value)
-                .font(.system(size: 16, weight: .bold))
-                .foregroundColor(WendTheme.Colors.coffee)
-            Text(label)
-                .font(.system(size: 11, weight: .medium))
-                .foregroundColor(WendTheme.Colors.coffee.opacity(0.5))
-                .textCase(.uppercase)
-                .kerning(0.5)
-        }
-        .frame(maxWidth: .infinity)
-        .padding(.vertical, 14)
-        .background(WendTheme.Colors.creamLight)
-        .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
-    }
-
-    // MARK: - Start Button
-
-    private var startButton: some View {
-        Button(action: onStart) {
-            HStack(spacing: 10) {
-                Image(systemName: isCompleted ? "arrow.clockwise" : "play.fill")
-                    .font(.system(size: 15, weight: .bold))
-                Text(isCompleted ? "Do it again" : "Start exercise")
-                    .font(.system(size: 17, weight: .bold))
-            }
-            .foregroundColor(WendTheme.Colors.creamLight)
-            .frame(maxWidth: .infinity, minHeight: 54)
-            .background(WendTheme.Colors.greenDark)
-            .clipShape(Capsule())
-        }
-        .buttonStyle(PlainButtonStyle())
-    }
-
-    // MARK: - Computed Properties
-
-    private var holdLabel: String {
-        let secs = Int(definition.holdDuration)
-        return secs >= 60 ? "\(secs / 60) min" : "\(secs)s"
-    }
-
-    private var bannerColors: [Color] {
-        switch definition.id {
-        case "cat-camel":
-            return [Color(hex: "#8CB4A0"), Color(hex: "#5A8A72")]
-        case "bridge-pose":
-            return [Color(hex: "#A0B4D4"), Color(hex: "#6A8AB4")]
-        case "seated-spinal-twist":
-            return [Color(hex: "#C4A882"), Color(hex: "#A07850")]
-        case "piriformis-stretch":
-            return [Color(hex: "#B4A0C4"), Color(hex: "#8A70A0")]
-        case "lumbar-rotation":
-            return [Color(hex: "#A0C4B4"), Color(hex: "#5A8A7A")]
-        default:
-            return [WendTheme.Colors.greenLight, WendTheme.Colors.greenBasic]
-        }
-    }
-
-    private var bannerIcon: String {
-        switch definition.id {
-        case "cat-camel":          return "figure.flexibility"
-        case "bridge-pose":        return "figure.yoga"
-        case "seated-spinal-twist": return "figure.mind.and.body"
-        case "piriformis-stretch": return "figure.seated.seatbelt"
-        case "lumbar-rotation":    return "figure.roll"
-        default:                   return "figure.flexibility"
+            .padding(16)
         }
     }
 }
-
-// MARK: - Preview
 
 #Preview {
     NavigationStack {

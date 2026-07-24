@@ -33,8 +33,6 @@ struct HomeView: View {
 
     @State private var selectedTab: WendTab = .exercise
     @State private var tipService = DailyTipService()
-    // TODO: Remover antes do release
-    @State private var showDebugCamera = false
 
     /// Sessão recém-concluída aguardando exibição do resumo.
     @State private var pendingSession: PendingSession?
@@ -42,17 +40,14 @@ struct HomeView: View {
     /// Exercício selecionado para iniciar no `ExercisingView`.
     @State private var exercisingDefinition: StretchDefinition?
 
-    /// Lista de exercícios da sessão a ser executada.
-    @State private var sessionStretches: [StretchDefinition] = []
+    /// Controla se a sessão sendo iniciada é a rotina completa ou exercício individual.
+    @State private var isRoutineSessionFlow = true
 
     /// Exercício selecionado para detalhe individual — abre `ExerciseDetailView`.
     @State private var selectedDetailDefinition: StretchDefinition?
 
     /// Controla exibição da sheet de adicionar exercício removido.
     @State private var showAddExerciseSheet = false
-
-    /// Filtro selecionado para a lista da rotina (nil = All).
-    @State private var selectedPeriodFilter: RoutineTimeOfDay? = nil
 
     // MARK: - Dados Derivados
 
@@ -66,7 +61,7 @@ struct HomeView: View {
     }
 
     private var activeStretches: [StretchDefinition] {
-        routineManager.activeStretches(for: selectedPeriodFilter)
+        routineManager.activeStretches
     }
 
     private var completedIDsToday: Set<String> {
@@ -79,7 +74,7 @@ struct HomeView: View {
     }
 
     private var completedCountToday: Int {
-        completedIDsToday.intersection(routineManager.activeStretches().map(\.id)).count
+        completedIDsToday.intersection(activeStretches.map(\.id)).count
     }
 
     // MARK: - Body
@@ -98,26 +93,23 @@ struct HomeView: View {
 
                         StreakCardView(streak: streak)
 
-                        // Carrossel horizontal de cards de rotina (Morning Stretch, Night Unwind, etc.)
-                        routineCardsCarousel
+                        // Featured card: botão START inicia a rotina completa
+                        FeaturedRoutineCardView(
+                            title: "Lower Back",
+                            description: "Wake up your body with gentle movements focused on the lower back.",
+                            durationText: totalDurationLabel,
+                            onStart: {
+                                startFullRoutineSession()
+                            }
+                        )
 
-                        // Lista da rotina interativa com filtro e badges de período
+                        // Lista da rotina interativa (swipe para excluir/editar + botão +)
                         routineListSection
 
                         TipCardView(tip: TipItem(
                             title: "Tip of the day",
                             text: tipService.currentMessage
                         ))
-
-                        // ── DEBUG: Remover antes do release ──────────────────
-                        Button { showDebugCamera = true } label: {
-                            Label("Debug: testar câmera", systemImage: "camera.metering.unknown")
-                                .font(.caption)
-                                .foregroundColor(WendTheme.Colors.coffee.opacity(0.35))
-                        }
-                        .frame(maxWidth: .infinity)
-                        .padding(.bottom, 4)
-                        // ────────────────────────────────────────────────────
                     }
                     .padding(.horizontal, 20)
                     .padding(.bottom, 100)
@@ -126,9 +118,6 @@ struct HomeView: View {
                 CustomTabBarView(selectedTab: $selectedTab)
                     .padding(.bottom, 12)
             }
-            .fullScreenCover(isPresented: $showDebugCamera) {
-                PoseTestView()
-            }
             .sheet(item: $selectedDetailDefinition) { def in
                 NavigationStack {
                     ExerciseDetailView(
@@ -136,7 +125,7 @@ struct HomeView: View {
                         isCompleted: completedIDsToday.contains(def.id),
                         onStart: {
                             selectedDetailDefinition = nil
-                            startRoutineSession(for: [def])
+                            startSingleExerciseSession(for: def)
                         }
                     )
                     .toolbar {
@@ -172,35 +161,11 @@ struct HomeView: View {
             .navigationDestination(item: $exercisingDefinition) { def in
                 ExercisingView(
                     definition: def,
-                    stretches: sessionStretches.isEmpty ? routineManager.activeStretches() : sessionStretches
+                    stretches: activeStretches,
+                    isRoutineFlow: isRoutineSessionFlow
                 )
             }
         } // NavigationStack
-    }
-
-    // MARK: - Routine Cards Carousel
-
-    private var routineCardsCarousel: some View {
-        ScrollView(.horizontal, showsIndicators: false) {
-            HStack(spacing: 16) {
-                ForEach(routineManager.availableTimesOfDay) { period in
-                    let periodStretches = routineManager.activeStretches(for: period)
-                    FeaturedRoutineCardView(
-                        title: period.cardTitle,
-                        description: period.cardDescription,
-                        durationText: durationLabel(for: periodStretches),
-                        bannerImageName: period.bannerImageName,
-                        timeOfDay: period,
-                        onStart: {
-                            startRoutineSession(for: periodStretches)
-                        }
-                    )
-                    .frame(width: 320)
-                }
-            }
-            .padding(.horizontal, 20)
-        }
-        .padding(.horizontal, -20)
     }
 
     // MARK: - Routine List Section
@@ -233,9 +198,6 @@ struct HomeView: View {
                 }
             }
 
-            // Filtro por Período (All / Morning / Night)
-            periodFilterBar
-
             VStack(spacing: 0) {
                 if activeStretches.isEmpty {
                     emptyRoutineView
@@ -263,39 +225,6 @@ struct HomeView: View {
         }
     }
 
-    private var periodFilterBar: some View {
-        HStack(spacing: 8) {
-            filterChip(title: "All", tod: nil)
-            ForEach(RoutineTimeOfDay.allCases) { tod in
-                filterChip(title: tod.rawValue, tod: tod)
-            }
-        }
-    }
-
-    private func filterChip(title: String, tod: RoutineTimeOfDay?) -> some View {
-        let isSelected = selectedPeriodFilter == tod
-        return Button {
-            withAnimation(.easeInOut(duration: 0.2)) {
-                selectedPeriodFilter = tod
-            }
-        } label: {
-            HStack(spacing: 4) {
-                if let tod {
-                    Image(systemName: tod.iconSymbol)
-                        .font(.system(size: 11, weight: .semibold))
-                }
-                Text(title)
-                    .font(.system(size: 13, weight: .semibold))
-            }
-            .padding(.horizontal, 12)
-            .padding(.vertical, 6)
-            .foregroundColor(isSelected ? WendTheme.Colors.creamLight : WendTheme.Colors.coffee.opacity(0.75))
-            .background(isSelected ? WendTheme.Colors.greenDark : WendTheme.Colors.creamLight)
-            .clipShape(Capsule())
-        }
-        .buttonStyle(PlainButtonStyle())
-    }
-
     private func routineRow(for def: StretchDefinition, index: Int) -> some View {
         let isDone = completedIDsToday.contains(def.id)
         let item = RoutineItem(
@@ -303,12 +232,11 @@ struct HomeView: View {
             detail: routineManager.detailText(for: def),
             isCompleted: isDone
         )
-        let tod = routineManager.timeOfDay(for: def)
 
         return Button {
             selectedDetailDefinition = def
         } label: {
-            RoutineRowView(item: item, timeOfDay: tod)
+            RoutineRowView(item: item)
                 .contentShape(Rectangle())
         }
         .buttonStyle(PlainButtonStyle())
@@ -354,7 +282,7 @@ struct HomeView: View {
 
     private var emptyRoutineView: some View {
         VStack(spacing: 8) {
-            Text("No exercises in this view")
+            Text("No exercises in today's routine")
                 .font(.system(size: 15, weight: .semibold))
                 .foregroundColor(WendTheme.Colors.coffee.opacity(0.6))
 
@@ -380,7 +308,6 @@ struct HomeView: View {
                 List {
                     Section {
                         ForEach(routineManager.removedStretches) { def in
-                            let tod = routineManager.timeOfDay(for: def)
                             Button {
                                 withAnimation {
                                     routineManager.restoreExercise(def.id)
@@ -395,14 +322,9 @@ struct HomeView: View {
                                         .foregroundColor(WendTheme.Colors.greenBasic)
 
                                     VStack(alignment: .leading, spacing: 2) {
-                                        HStack(spacing: 6) {
-                                            Text(def.name)
-                                                .font(.system(size: 16, weight: .semibold))
-                                                .foregroundColor(WendTheme.Colors.coffee)
-                                            Image(systemName: tod.iconSymbol)
-                                                .font(.system(size: 11, weight: .bold))
-                                                .foregroundColor(tod == .morning ? Color(hex: "#D4832A") : Color(hex: "#6B5B95"))
-                                        }
+                                        Text(def.name)
+                                            .font(.system(size: 16, weight: .semibold))
+                                            .foregroundColor(WendTheme.Colors.coffee)
 
                                         Text(routineManager.detailText(for: def))
                                             .font(.system(size: 13))
@@ -436,14 +358,19 @@ struct HomeView: View {
 
     // MARK: - Actions & Helpers
 
-    private func startRoutineSession(for list: [StretchDefinition]) {
-        guard let first = list.first else { return }
-        sessionStretches = list
+    private func startFullRoutineSession() {
+        guard let first = activeStretches.first else { return }
+        isRoutineSessionFlow = true
         exercisingDefinition = first
     }
 
-    private func durationLabel(for list: [StretchDefinition]) -> String {
-        let totalSecs = list.reduce(0.0) { sum, stretch in
+    private func startSingleExerciseSession(for stretch: StretchDefinition) {
+        isRoutineSessionFlow = false
+        exercisingDefinition = stretch
+    }
+
+    private var totalDurationLabel: String {
+        let totalSecs = activeStretches.reduce(0.0) { sum, stretch in
             sum + routineManager.holdDuration(for: stretch) * Double(routineManager.targetReps(for: stretch))
         }
         let mins = Int(totalSecs) / 60

@@ -8,19 +8,8 @@ import Vision
 /// Tela de execução de exercício em tempo real.
 ///
 /// Exibe o preview da câmera frontal em tela cheia com overlay de pose e
-/// um card inferior flutuante com nome do exercício, feedback, estatísticas
-/// e o botão para finalizar a sessão.
-///
-/// ### Fluxo de dados
-/// ```
-/// CameraManager → PoseAnalyzer → ExerciseSessionController
-///                                        ↓
-///                              Phase, holdProgress, withinRangePercentage
-///                                        ↓
-///                              Card inferior (feedback + stats)
-///                                        ↓ sessionFinished
-///                              SessionSummaryView
-/// ```
+/// um card inferior flutuante com suporte a rotina completa (Next/Finish)
+/// ou exercício individual.
 struct ExercisingView: View {
 
     // MARK: - Parâmetros
@@ -29,6 +18,9 @@ struct ExercisingView: View {
     let stretches: [StretchDefinition]
     /// Índice inicial do exercício a ser executado.
     let initialIndex: Int
+    /// `true` se foi iniciado a partir da rotina completa (botão Start do card),
+    /// `false` se foi iniciado para um exercício individual.
+    let isRoutineFlow: Bool
 
     // MARK: - State Local
 
@@ -37,10 +29,16 @@ struct ExercisingView: View {
 
     // MARK: - Initializer
 
-    init(definition: StretchDefinition? = nil, stretches: [StretchDefinition]? = nil, initialIndex: Int = 0) {
-        let list = stretches ?? RoutineManager.shared.activeStretches()
+    init(
+        definition: StretchDefinition? = nil,
+        stretches: [StretchDefinition]? = nil,
+        initialIndex: Int = 0,
+        isRoutineFlow: Bool = true
+    ) {
+        let list = stretches ?? RoutineManager.shared.activeStretches
         let activeList = list.isEmpty ? StretchDefinition.sampleStretches : list
         self.stretches = activeList
+        self.isRoutineFlow = isRoutineFlow
 
         if let def = definition, let idx = activeList.firstIndex(where: { $0.id == def.id }) {
             self.initialIndex = idx
@@ -97,25 +95,45 @@ struct ExercisingView: View {
                     .allowsHitTesting(false)
                 }
 
-                // ── 3. Top bar com fechar e indicador "1/5" ─────────────────────
+                // ── 3. Botão fechar (canto superior esquerdo) ──────────────────
                 VStack {
                     HStack {
                         closeButton
                         Spacer()
-                        stepIndicatorPill
                     }
                     .padding(.top, geo.safeAreaInsets.top + 12)
-                    .padding(.horizontal, 16)
+                    .padding(.leading, 16)
                     Spacer()
                 }
                 .ignoresSafeArea()
 
-                // ── 4. Card inferior flutuante ─────────────────────────────────
+                // ── 4. Card inferior flutuante (scrollável/deslizável) ───────────
                 if let ctrl = controller {
                     BottomSessionCard(
                         definition: currentDefinition,
                         controller: ctrl,
-                        onFinish: { finishSession(controller: ctrl) }
+                        currentIndex: currentIndex,
+                        totalCount: stretches.count,
+                        isRoutineFlow: isRoutineFlow,
+                        onNextExercise: {
+                            advanceToNextExercise()
+                        },
+                        onFinish: {
+                            finishSession(controller: ctrl)
+                        }
+                    )
+                    .gesture(
+                        DragGesture(minimumDistance: 30)
+                            .onEnded { value in
+                                guard isRoutineFlow else { return }
+                                if value.translation.width < -50 {
+                                    // Swipe para a esquerda -> Próximo exercício
+                                    advanceToNextExercise()
+                                } else if value.translation.width > 50 {
+                                    // Swipe para a direita -> Exercício anterior
+                                    goToPreviousExercise()
+                                }
+                            }
                     )
                     .padding(.horizontal, 16)
                     .padding(.bottom, geo.safeAreaInsets.bottom + 16)
@@ -141,57 +159,11 @@ struct ExercisingView: View {
         .navigationBarHidden(true)
     }
 
-    // MARK: - Step Indicator Pill ("1/5")
-
-    private var stepIndicatorPill: some View {
-        Menu {
-            Section("Select exercise") {
-                ForEach(Array(stretches.enumerated()), id: \.element.id) { index, stretch in
-                    Button {
-                        switchExercise(to: index)
-                    } label: {
-                        HStack {
-                            Text("\(index + 1). \(stretch.name)")
-                            if index == currentIndex {
-                                Image(systemName: "checkmark")
-                            }
-                        }
-                    }
-                }
-            }
-        } label: {
-            HStack(spacing: 6) {
-                Text("\(currentIndex + 1)/\(stretches.count)")
-                    .font(.system(size: 14, weight: .bold))
-                    .foregroundColor(WendTheme.Colors.coffee)
-
-                Image(systemName: "chevron.down")
-                    .font(.system(size: 11, weight: .bold))
-                    .foregroundColor(WendTheme.Colors.coffee.opacity(0.6))
-            }
-            .padding(.horizontal, 14)
-            .padding(.vertical, 8)
-            .background(
-                ZStack {
-                    Circle().fill(.ultraThinMaterial)
-                    WendTheme.Colors.creamBasic.opacity(0.75)
-                }
-                .clipShape(Capsule())
-            )
-            .overlay(
-                Capsule()
-                    .stroke(Color.white.opacity(0.4), lineWidth: 1)
-            )
-            .shadow(color: Color.black.opacity(0.1), radius: 6, x: 0, y: 3)
-        }
-    }
-
-    // MARK: - Setup & Switch
+    // MARK: - Setup & Navigation
 
     private func setupSession() {
         controller?.stop()
 
-        // Aplica os parâmetros customizados pelo RoutineManager
         let customHold = routineManager.holdDuration(for: currentDefinition)
         let customReps = routineManager.targetReps(for: currentDefinition)
 
@@ -211,7 +183,9 @@ struct ExercisingView: View {
             onSessionFinished: { achieved, accuracy in
                 let record = saveRecord(definition: effectiveDefinition, achieved: achieved, accuracy: accuracy)
                 completedRecord = record
-                navigateToSummary = true
+                if !isRoutineFlow || currentIndex == stretches.count - 1 {
+                    navigateToSummary = true
+                }
             }
         )
         controller = ctrl
@@ -222,10 +196,22 @@ struct ExercisingView: View {
         ctrl.start()
     }
 
-    private func switchExercise(to index: Int) {
-        guard index >= 0 && index < stretches.count && index != currentIndex else { return }
-        currentIndex = index
-        setupSession()
+    private func advanceToNextExercise() {
+        if currentIndex < stretches.count - 1 {
+            withAnimation(.easeInOut(duration: 0.3)) {
+                currentIndex += 1
+            }
+            setupSession()
+        }
+    }
+
+    private func goToPreviousExercise() {
+        if currentIndex > 0 {
+            withAnimation(.easeInOut(duration: 0.3)) {
+                currentIndex -= 1
+            }
+            setupSession()
+        }
     }
 
     // MARK: - Ações
@@ -262,43 +248,34 @@ struct ExercisingView: View {
             dismiss()
         } label: {
             ZStack {
-                // Liquid Glass + tom Cream Basic — igual à tab bar
                 ZStack {
                     Circle().fill(.ultraThinMaterial)
-                    Circle().fill(WendTheme.Colors.creamBasic.opacity(0.75))
+                    WendTheme.Colors.creamBasic.opacity(0.75)
                 }
-                .frame(width: 40, height: 40)
-                .shadow(color: .black.opacity(0.10), radius: 8, x: 0, y: 3)
+                .clipShape(Circle())
+                .overlay(
+                    Circle()
+                        .stroke(Color.white.opacity(0.4), lineWidth: 1)
+                )
 
                 Image(systemName: "xmark")
-                    .font(.system(size: 13, weight: .bold))
+                    .font(.system(size: 15, weight: .bold))
                     .foregroundColor(WendTheme.Colors.coffee)
             }
+            .frame(width: 44, height: 44)
+            .shadow(color: Color.black.opacity(0.12), radius: 8, x: 0, y: 4)
         }
         .buttonStyle(PlainButtonStyle())
     }
 }
 
-// MARK: - Pose Overlay
+// MARK: - Pose Overlay View
 
-/// Overlay Canvas que converte coordenadas normalizadas do Vision para o espaço de tela.
-///
-/// ### Conversão de coordenadas
-/// Vision usa origem no **canto inferior esquerdo**, normalizado [0, 1].
-/// A câmera frontal está configurada com `isVideoMirrored = true`, mas o Vision
-/// processa o buffer original (não espelhado) → precisamos inverter X para alinhar
-/// com o que o usuário vê no preview.
-///
-/// Fórmula:
-/// - `screenX = (1 - normalizedX) × width`   ← inverte X (espelho)
-/// - `screenY = (1 - normalizedY) × height`  ← inverte Y (origem inferior)
 private struct PoseOverlayView: View {
-
-    let joints: PoseAnalyzer.JointMap
+    let joints: [VNHumanBodyPoseObservation.JointName: VNRecognizedPoint]
     let evaluations: [PoseAnalyzer.AngleEvaluation?]
     let rules: [JointAngleRule]
 
-    // Cor do ponto quando todos os ângulos estão dentro da faixa
     private var allInRange: Bool {
         evaluations.allSatisfy { $0?.isWithinRange == true }
     }
@@ -310,10 +287,7 @@ private struct PoseOverlayView: View {
         }
     }
 
-    // MARK: - Desenho de Conexões
-
     private func drawConnections(context: GraphicsContext, size: CGSize) {
-        // Conecta os trios de articulações de cada regra com linhas tracejadas
         for rule in rules {
             guard
                 let ptA = joints[rule.jointA],
@@ -351,10 +325,7 @@ private struct PoseOverlayView: View {
         )
     }
 
-    // MARK: - Desenho de Pontos
-
     private func drawJoints(context: GraphicsContext, size: CGSize) {
-        // Articulações das regras ativas — coloridas conforme status
         let ruleJoints: Set<VNHumanBodyPoseObservation.JointName> = Set(
             rules.flatMap { [$0.jointA, $0.jointB, $0.jointC] }
         )
@@ -373,7 +344,6 @@ private struct PoseOverlayView: View {
                 ? (allInRange ? WendTheme.Colors.greenLight : .white)
                 : .white.opacity(0.3)
 
-            // Anel externo
             let outerRect = CGRect(
                 x: pos.x - outerDiameter / 2,
                 y: pos.y - outerDiameter / 2,
@@ -382,7 +352,6 @@ private struct PoseOverlayView: View {
             )
             context.fill(Path(ellipseIn: outerRect), with: .color(outerColor.opacity(0.4)))
 
-            // Ponto interno sólido
             let innerRect = CGRect(
                 x: pos.x - innerDiameter / 2,
                 y: pos.y - innerDiameter / 2,
@@ -393,14 +362,10 @@ private struct PoseOverlayView: View {
         }
     }
 
-    // MARK: - Conversão de Coordenadas
-
     private func screenPoint(
         from normalized: CGPoint,
         in size: CGSize
     ) -> CGPoint {
-        // Vision: origem bottom-left, x cresce para direita, y cresce para cima
-        // Preview (espelhado): x invertido, y invertido
         CGPoint(
             x: (1.0 - normalized.x) * size.width,
             y: (1.0 - normalized.y) * size.height
@@ -414,10 +379,30 @@ private struct BottomSessionCard: View {
 
     let definition: StretchDefinition
     @ObservedObject var controller: ExerciseSessionController
+    let currentIndex: Int
+    let totalCount: Int
+    let isRoutineFlow: Bool
+    let onNextExercise: () -> Void
     let onFinish: () -> Void
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
+
+            // ── Indicador pequeno "1 de 5" (se rotina completa) ──────────────────
+            if isRoutineFlow {
+                HStack {
+                    Text("\(currentIndex + 1) of \(totalCount)")
+                        .font(.system(size: 12, weight: .bold))
+                        .foregroundColor(WendTheme.Colors.coffee.opacity(0.6))
+                        .padding(.horizontal, 10)
+                        .padding(.vertical, 4)
+                        .background(WendTheme.Colors.creamLight)
+                        .clipShape(Capsule())
+
+                    Spacer()
+                }
+                .padding(.bottom, 6)
+            }
 
             // ── Cabeçalho: Nome + badge Tracking ──────────────────────────────
             HStack(alignment: .top) {
@@ -456,16 +441,8 @@ private struct BottomSessionCard: View {
             }
             .padding(.bottom, 16)
 
-            // ── Botão Finish Exercise ─────────────────────────────────────────
-            Button(action: onFinish) {
-                Label("Finish Exercise", systemImage: "checkmark.seal.fill")
-                    .font(.system(size: 16, weight: .bold))
-                    .foregroundColor(WendTheme.Colors.creamLight)
-                    .frame(maxWidth: .infinity, minHeight: 52)
-                    .background(WendTheme.Colors.greenDark)
-                    .clipShape(Capsule())
-            }
-            .buttonStyle(PlainButtonStyle())
+            // ── Botão de ação (Próximo vs Concluir) ────────────────────────────
+            actionButton
         }
         .padding(.horizontal, 20)
         .padding(.top, 20)
@@ -475,6 +452,42 @@ private struct BottomSessionCard: View {
                 .fill(Color(hex: "#FFF4F0").opacity(0.92))
                 .shadow(color: .black.opacity(0.12), radius: 20, x: 0, y: -4)
         )
+    }
+
+    // MARK: - Action Button (Next vs Finish)
+
+    private var actionButton: some View {
+        let isFinished = controller.phase == .sessionFinished
+
+        if isRoutineFlow && currentIndex < totalCount - 1 {
+            // Rotina completa, ainda existem mais exercícios
+            return Button {
+                if isFinished {
+                    onNextExercise()
+                } else {
+                    onFinish()
+                }
+            } label: {
+                Label(isFinished ? "Next Exercise" : "Finish Exercise", systemImage: isFinished ? "arrow.right" : "checkmark.seal.fill")
+                    .font(.system(size: 16, weight: .bold))
+                    .foregroundColor(WendTheme.Colors.creamLight)
+                    .frame(maxWidth: .infinity, minHeight: 52)
+                    .background(isFinished ? WendTheme.Colors.greenBasic : WendTheme.Colors.greenDark)
+                    .clipShape(Capsule())
+            }
+            .buttonStyle(PlainButtonStyle())
+        } else {
+            // Exercício individual ou último exercício da rotina
+            return Button(action: onFinish) {
+                Label(isRoutineFlow ? "Finish Routine" : "Finish Exercise", systemImage: "checkmark.seal.fill")
+                    .font(.system(size: 16, weight: .bold))
+                    .foregroundColor(WendTheme.Colors.creamLight)
+                    .frame(maxWidth: .infinity, minHeight: 52)
+                    .background(WendTheme.Colors.greenDark)
+                    .clipShape(Capsule())
+            }
+            .buttonStyle(PlainButtonStyle())
+        }
     }
 
     // MARK: - Tracking Badge
@@ -519,7 +532,18 @@ private struct BottomSessionCard: View {
     // MARK: - Computed Strings
 
     private var feedbackText: String {
-        // Modo time-only (ex: Lumbar Rotation supino) — sem validação de ângulo
+        if controller.phase == .sessionFinished {
+            if isRoutineFlow {
+                if currentIndex < totalCount - 1 {
+                    return "\(currentIndex + 1) of \(totalCount) completed! Tap Next for the next exercise."
+                } else {
+                    return "Routine complete! All \(totalCount) exercises done. 🎉"
+                }
+            } else {
+                return "Session complete! Great work today."
+            }
+        }
+
         let isTimeOnly = definition.targetJoints.isEmpty
         if isTimeOnly {
             switch controller.phase {
@@ -528,8 +552,6 @@ private struct BottomSessionCard: View {
                 return pct < 50
                     ? "Hold the position and breathe slowly."
                     : "Almost there — keep holding! 💪"
-            case .sessionFinished:
-                return "Session complete! Great work today."
             default:
                 return "Hold the position and breathe slowly."
             }
@@ -553,7 +575,7 @@ private struct BottomSessionCard: View {
             }
             return "Adjust your position to continue."
         case .sessionFinished:
-            return "Session complete! Great work today."
+            return "Session complete!"
         }
     }
 
@@ -564,9 +586,6 @@ private struct BottomSessionCard: View {
         return String(format: "%02d:%02d", mins, secs)
     }
 }
-
-
-
 
 // MARK: - Preview
 

@@ -1,18 +1,15 @@
 import SwiftUI
 
-/// Linha individual da lista de rotinas com indicador de status, tag do período e chevron.
+/// Linha individual da lista de rotinas com indicador de status e chevron.
 public struct RoutineRowView: View {
     public var item: RoutineItem
-    public var timeOfDay: RoutineTimeOfDay?
     public var onToggle: () -> Void
 
     public init(
         item: RoutineItem,
-        timeOfDay: RoutineTimeOfDay? = nil,
         onToggle: @escaping () -> Void = {}
     ) {
         self.item = item
-        self.timeOfDay = timeOfDay
         self.onToggle = onToggle
     }
 
@@ -36,21 +33,6 @@ public struct RoutineRowView: View {
             }
 
             Spacer()
-
-            if let tod = timeOfDay {
-                HStack(spacing: 4) {
-                    Image(systemName: tod.iconSymbol)
-                        .font(.system(size: 11, weight: .bold))
-                        .foregroundColor(tod == .morning ? Color(hex: "#D4832A") : Color(hex: "#6B5B95"))
-                    Text(tod.rawValue)
-                        .font(.system(size: 11, weight: .semibold))
-                        .foregroundColor(WendTheme.Colors.coffee.opacity(0.7))
-                }
-                .padding(.horizontal, 8)
-                .padding(.vertical, 4)
-                .background(WendTheme.Colors.creamBasic)
-                .clipShape(Capsule())
-            }
 
             Image(systemName: WendSymbols.chevronRight)
                 .font(.system(size: 14, weight: .semibold))
