@@ -165,12 +165,17 @@ struct ExercisingView: View {
             dismiss()
         } label: {
             ZStack {
-                Circle()
-                    .fill(.black.opacity(0.35))
-                    .frame(width: 40, height: 40)
+                // Liquid Glass + tom Cream Basic — igual à tab bar
+                ZStack {
+                    Circle().fill(.ultraThinMaterial)
+                    Circle().fill(WendTheme.Colors.creamBasic.opacity(0.75))
+                }
+                .frame(width: 40, height: 40)
+                .shadow(color: .black.opacity(0.10), radius: 8, x: 0, y: 3)
+
                 Image(systemName: "xmark")
-                    .font(.system(size: 14, weight: .bold))
-                    .foregroundColor(.white)
+                    .font(.system(size: 13, weight: .bold))
+                    .foregroundColor(WendTheme.Colors.coffee)
             }
         }
         .buttonStyle(PlainButtonStyle())
@@ -388,7 +393,7 @@ private struct BottomSessionCard: View {
         }
         .padding(.horizontal, 10)
         .padding(.vertical, 5)
-        .background(WendTheme.Colors.greenLight)
+        .background(WendTheme.Colors.creamLight)
         .clipShape(Capsule())
     }
 
