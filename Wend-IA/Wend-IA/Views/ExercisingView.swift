@@ -102,7 +102,7 @@ struct ExercisingView: View {
                 }
                 .ignoresSafeArea()
 
-                // ── 4. Card inferior flutuante (scrollável/deslizável) ───────────
+                // ── 4. Card inferior flutuante ─────────────────────────────────
                 if let ctrl = controller {
                     BottomSessionCard(
                         definition: currentDefinition,
@@ -373,6 +373,9 @@ private struct BottomSessionCard: View {
     let onNextExercise: () -> Void
     let onFinish: () -> Void
 
+    @State private var feedback: SessionFeedback?
+    @State private var isGeneratingFeedback = false
+
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
 
@@ -405,14 +408,14 @@ private struct BottomSessionCard: View {
             }
             .padding(.bottom, 8)
 
-            // ── Linha de feedback ─────────────────────────────────────────────
+            // ── Linha de feedback em tempo real ───────────────────────────────
             Text(feedbackText)
                 .font(.system(size: 15, weight: .regular))
                 .foregroundColor(WendTheme.Colors.coffee.opacity(0.75))
                 .lineLimit(2)
                 .fixedSize(horizontal: false, vertical: true)
                 .animation(.easeInOut(duration: 0.3), value: feedbackText)
-                .padding(.bottom, 18)
+                .padding(.bottom, 14)
 
             // ── Grade de estatísticas ─────────────────────────────────────────
             HStack(spacing: 12) {
@@ -427,9 +430,15 @@ private struct BottomSessionCard: View {
                     color: WendTheme.Colors.greenBasic
                 )
             }
-            .padding(.bottom, 16)
+            .padding(.bottom, 14)
 
-            // ── Botão de ação (Next vs Done) ──────────────────────────────────
+            // ── Seção de Feedback da IA (exibida quando o exercício finaliza) ──
+            if controller.phase == .sessionFinished {
+                aiFeedbackBlock
+                    .padding(.bottom, 14)
+            }
+
+            // ── Botão de ação (Finish Exercise -> Next vs Done) ─────────────────
             actionButton
         }
         .padding(.horizontal, 20)
@@ -437,35 +446,121 @@ private struct BottomSessionCard: View {
         .padding(.bottom, 20)
         .background(
             RoundedRectangle(cornerRadius: 32, style: .continuous)
-                .fill(Color(hex: "#FFF4F0").opacity(0.92))
+                .fill(Color(hex: "#FFF4F0").opacity(0.95))
                 .shadow(color: .black.opacity(0.12), radius: 20, x: 0, y: -4)
         )
+        .task(id: controller.phase) {
+            if controller.phase == .sessionFinished {
+                await fetchFeedback()
+            } else {
+                feedback = nil
+            }
+        }
     }
 
-    // MARK: - Action Button (Next vs Done)
+    // MARK: - AI Feedback Block
+
+    @ViewBuilder
+    private var aiFeedbackBlock: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            HStack(spacing: 6) {
+                Image(systemName: "sparkles")
+                    .font(.system(size: 13, weight: .semibold))
+                    .foregroundColor(WendTheme.Colors.greenDark)
+                Text("Exercise feedback")
+                    .font(.system(size: 13, weight: .bold))
+                    .foregroundColor(WendTheme.Colors.coffee)
+                Spacer()
+                Text("Apple Intelligence")
+                    .font(.system(size: 10, weight: .medium))
+                    .foregroundColor(WendTheme.Colors.coffee.opacity(0.35))
+            }
+
+            if isGeneratingFeedback {
+                HStack(spacing: 8) {
+                    ProgressView().tint(WendTheme.Colors.greenBasic)
+                    Text("Generating feedback...")
+                        .font(.system(size: 13))
+                        .foregroundColor(WendTheme.Colors.coffee.opacity(0.6))
+                }
+                .padding(12)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .background(WendTheme.Colors.creamLight)
+                .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
+            } else if let fb = feedback {
+                VStack(alignment: .leading, spacing: 8) {
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text("WHAT WENT WELL")
+                            .font(.system(size: 10, weight: .bold))
+                            .foregroundColor(WendTheme.Colors.greenBasic)
+                        Text(fb.whatWentWell)
+                            .font(.system(size: 13, weight: .regular))
+                            .foregroundColor(WendTheme.Colors.coffee)
+                    }
+
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text("TIP TO IMPROVE")
+                            .font(.system(size: 10, weight: .bold))
+                            .foregroundColor(Color(hex: "#C8882A"))
+                        Text(fb.tipToImprove)
+                            .font(.system(size: 13, weight: .regular))
+                            .foregroundColor(WendTheme.Colors.coffee)
+                    }
+                }
+                .padding(12)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .background(WendTheme.Colors.creamLight)
+                .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
+            }
+        }
+    }
+
+    private func fetchFeedback() async {
+        isGeneratingFeedback = true
+        let achieved = controller.sessionElapsedTime * (controller.withinRangePercentage / 100)
+        let record = SessionRecord(
+            date: Date(),
+            exerciseID: definition.id,
+            holdDurationAchieved: achieved,
+            targetHoldDuration: definition.holdDuration * 3,
+            withinRangePercentage: controller.withinRangePercentage
+        )
+        let result = await CoachingService.generateFeedback(for: record, exerciseName: definition.name)
+        feedback = result
+        isGeneratingFeedback = false
+    }
+
+    // MARK: - Action Button
 
     private var actionButton: some View {
         let isFinished = controller.phase == .sessionFinished
 
-        if isRoutineFlow && currentIndex < totalCount - 1 {
-            // Rotina completa, ainda existem mais exercícios
-            return Button {
-                if isFinished {
-                    onNextExercise()
-                } else {
-                    onNextExercise()
-                }
-            } label: {
-                Label(isFinished ? "Next" : "Next", systemImage: "arrow.right")
+        if !isFinished {
+            // Durante o exercício: botão para finalizar antecipadamente
+            return Button(action: {
+                controller.stop()
+            }) {
+                Label("Finish Exercise", systemImage: "checkmark.circle")
                     .font(.system(size: 16, weight: .bold))
                     .foregroundColor(WendTheme.Colors.creamLight)
                     .frame(maxWidth: .infinity, minHeight: 52)
-                    .background(isFinished ? WendTheme.Colors.greenBasic : WendTheme.Colors.greenDark)
+                    .background(WendTheme.Colors.coffee.opacity(0.85))
+                    .clipShape(Capsule())
+            }
+            .buttonStyle(PlainButtonStyle())
+        } else if isRoutineFlow && currentIndex < totalCount - 1 {
+            // Exercício concluído na rotina completa: botão Next
+            return Button(action: onNextExercise) {
+                Label("Next", systemImage: "arrow.right")
+                    .font(.system(size: 16, weight: .bold))
+                    .foregroundColor(WendTheme.Colors.creamLight)
+                    .frame(maxWidth: .infinity, minHeight: 52)
+                    .background(WendTheme.Colors.greenBasic)
                     .clipShape(Capsule())
             }
             .buttonStyle(PlainButtonStyle())
         } else {
-            // Exercício individual ou último exercício da rotina
+            // Último exercício da rotina ou exercício individual: botão Done
             return Button(action: onFinish) {
                 Label("Done", systemImage: "checkmark.seal.fill")
                     .font(.system(size: 16, weight: .bold))
@@ -523,7 +618,7 @@ private struct BottomSessionCard: View {
         if controller.phase == .sessionFinished {
             if isRoutineFlow {
                 if currentIndex < totalCount - 1 {
-                    return "Exercise complete! Tap Next for the next stretch."
+                    return "Exercise complete! Tap Next to continue."
                 } else {
                     return "Routine complete! All \(totalCount) exercises finished."
                 }
