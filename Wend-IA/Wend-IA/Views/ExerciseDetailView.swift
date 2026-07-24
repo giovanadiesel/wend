@@ -1,0 +1,303 @@
+import SwiftData
+import SwiftUI
+
+
+// MARK: - ExerciseDetailView
+
+/// Tela de detalhe individual de um exercício, exibida ao tocar em uma row da rotina.
+///
+/// Mostra a descrição completa, dicas de respiração, duração estimada e o botão
+/// para iniciar a sessão de rastreio via `ExercisingView`.
+struct ExerciseDetailView: View {
+
+    // MARK: - Parâmetros
+
+    let definition: StretchDefinition
+    let isCompleted: Bool
+    var onStart: () -> Void
+
+    // MARK: - Environment
+
+    @Environment(\.dismiss) private var dismiss
+
+    // MARK: - Body
+
+    var body: some View {
+        ZStack(alignment: .bottom) {
+            WendTheme.Colors.creamBasic.ignoresSafeArea()
+
+            ScrollView(.vertical, showsIndicators: false) {
+                VStack(alignment: .leading, spacing: 0) {
+
+                    // ── Banner ─────────────────────────────────────────────────
+                    bannerSection
+                        .padding(.bottom, 24)
+
+                    // ── Body content ───────────────────────────────────────────
+                    VStack(alignment: .leading, spacing: 24) {
+
+                        // Sobre o exercício
+                        sectionBlock(
+                            icon: "figure.flexibility",
+                            title: "About this exercise",
+                            color: WendTheme.Colors.greenBasic
+                        ) {
+                            Text(definition.instructions)
+                                .font(.system(size: 15, weight: .regular))
+                                .foregroundColor(WendTheme.Colors.coffee.opacity(0.8))
+                                .lineSpacing(4)
+                                .fixedSize(horizontal: false, vertical: true)
+                        }
+
+                        // Dica de respiração
+                        if let tip = definition.breathingTip {
+                            sectionBlock(
+                                icon: "wind",
+                                title: "Breathing tip",
+                                color: Color(hex: "#4A8B6F")
+                            ) {
+                                Text(tip)
+                                    .font(.system(size: 15, weight: .regular))
+                                    .foregroundColor(WendTheme.Colors.coffee.opacity(0.8))
+                                    .lineSpacing(4)
+                                    .fixedSize(horizontal: false, vertical: true)
+                            }
+                        }
+
+                        // Stats rápidos
+                        statsRow
+
+                        // Espaçamento para o botão fixo
+                        Spacer(minLength: 100)
+                    }
+                    .padding(.horizontal, 20)
+                }
+            }
+
+            // ── Botão fixo no fundo ────────────────────────────────────────────
+            startButton
+                .padding(.horizontal, 20)
+                .padding(.bottom, 32)
+                .background(
+                    LinearGradient(
+                        colors: [WendTheme.Colors.creamBasic.opacity(0), WendTheme.Colors.creamBasic],
+                        startPoint: .top,
+                        endPoint: .bottom
+                    )
+                    .frame(height: 120)
+                    .allowsHitTesting(false),
+                    alignment: .bottom
+                )
+        }
+        .navigationTitle(definition.name)
+        .navigationBarTitleDisplayMode(.inline)
+        .toolbarBackground(WendTheme.Colors.creamBasic, for: .navigationBar)
+        .toolbarBackground(.visible, for: .navigationBar)
+    }
+
+    // MARK: - Banner Section
+
+    private var bannerSection: some View {
+        ZStack(alignment: .bottomLeading) {
+            // Gradiente de cor por exercício
+            LinearGradient(
+                colors: bannerColors,
+                startPoint: .topLeading,
+                endPoint: .bottomTrailing
+            )
+            .frame(height: 200)
+
+            // Ícone grande centralizado
+            Image(systemName: bannerIcon)
+                .font(.system(size: 72, weight: .thin))
+                .foregroundColor(.white.opacity(0.25))
+                .frame(maxWidth: .infinity)
+
+            // Badges no canto inferior esquerdo
+            HStack(spacing: 8) {
+                durationBadge
+                if isCompleted { completedBadge }
+                if definition.targetJoints.isEmpty { timerBadge }
+            }
+            .padding(16)
+        }
+    }
+
+    private var durationBadge: some View {
+        HStack(spacing: 5) {
+            Image(systemName: "clock")
+                .font(.system(size: 12, weight: .semibold))
+            Text(holdLabel)
+                .font(.system(size: 13, weight: .semibold))
+        }
+        .foregroundColor(WendTheme.Colors.coffee)
+        .padding(.horizontal, 12)
+        .padding(.vertical, 6)
+        .background(WendTheme.Colors.creamLight)
+        .clipShape(Capsule())
+    }
+
+    private var completedBadge: some View {
+        HStack(spacing: 5) {
+            Image(systemName: "checkmark.circle.fill")
+                .font(.system(size: 12, weight: .semibold))
+            Text("Done today")
+                .font(.system(size: 13, weight: .semibold))
+        }
+        .foregroundColor(WendTheme.Colors.greenBasic)
+        .padding(.horizontal, 12)
+        .padding(.vertical, 6)
+        .background(WendTheme.Colors.greenLight)
+        .clipShape(Capsule())
+    }
+
+    private var timerBadge: some View {
+        HStack(spacing: 5) {
+            Image(systemName: "timer")
+                .font(.system(size: 12, weight: .semibold))
+            Text("Timer only")
+                .font(.system(size: 13, weight: .semibold))
+        }
+        .foregroundColor(WendTheme.Colors.coffee.opacity(0.65))
+        .padding(.horizontal, 12)
+        .padding(.vertical, 6)
+        .background(WendTheme.Colors.creamBasic)
+        .clipShape(Capsule())
+    }
+
+    // MARK: - Section Block
+
+    private func sectionBlock<Content: View>(
+        icon: String,
+        title: String,
+        color: Color,
+        @ViewBuilder content: () -> Content
+    ) -> some View {
+        VStack(alignment: .leading, spacing: 12) {
+            HStack(spacing: 8) {
+                Image(systemName: icon)
+                    .font(.system(size: 15, weight: .semibold))
+                    .foregroundColor(color)
+                Text(title)
+                    .font(.system(size: 16, weight: .bold))
+                    .foregroundColor(WendTheme.Colors.coffee)
+            }
+            content()
+        }
+        .padding(16)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(WendTheme.Colors.creamLight)
+        .clipShape(RoundedRectangle(cornerRadius: 20, style: .continuous))
+    }
+
+    // MARK: - Stats Row
+
+    private var statsRow: some View {
+        HStack(spacing: 12) {
+            statCell(
+                label: "Hold time",
+                value: holdLabel,
+                icon: "clock.fill",
+                color: WendTheme.Colors.greenBasic
+            )
+            statCell(
+                label: "Tracking",
+                value: definition.targetJoints.isEmpty ? "Timer" : "Camera",
+                icon: definition.targetJoints.isEmpty ? "timer" : "camera.fill",
+                color: WendTheme.Colors.greenBasic
+            )
+            statCell(
+                label: "Reps",
+                value: "3×",
+                icon: "arrow.counterclockwise",
+                color: WendTheme.Colors.greenBasic
+            )
+        }
+    }
+
+    private func statCell(label: String, value: String, icon: String, color: Color) -> some View {
+        VStack(spacing: 6) {
+            Image(systemName: icon)
+                .font(.system(size: 18, weight: .medium))
+                .foregroundColor(color)
+            Text(value)
+                .font(.system(size: 16, weight: .bold))
+                .foregroundColor(WendTheme.Colors.coffee)
+            Text(label)
+                .font(.system(size: 11, weight: .medium))
+                .foregroundColor(WendTheme.Colors.coffee.opacity(0.5))
+                .textCase(.uppercase)
+                .kerning(0.5)
+        }
+        .frame(maxWidth: .infinity)
+        .padding(.vertical, 14)
+        .background(WendTheme.Colors.creamLight)
+        .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
+    }
+
+    // MARK: - Start Button
+
+    private var startButton: some View {
+        Button(action: onStart) {
+            HStack(spacing: 10) {
+                Image(systemName: isCompleted ? "arrow.clockwise" : "play.fill")
+                    .font(.system(size: 15, weight: .bold))
+                Text(isCompleted ? "Do it again" : "Start exercise")
+                    .font(.system(size: 17, weight: .bold))
+            }
+            .foregroundColor(WendTheme.Colors.creamLight)
+            .frame(maxWidth: .infinity, minHeight: 54)
+            .background(WendTheme.Colors.greenDark)
+            .clipShape(Capsule())
+        }
+        .buttonStyle(PlainButtonStyle())
+    }
+
+    // MARK: - Computed Properties
+
+    private var holdLabel: String {
+        let secs = Int(definition.holdDuration)
+        return secs >= 60 ? "\(secs / 60) min" : "\(secs)s"
+    }
+
+    private var bannerColors: [Color] {
+        switch definition.id {
+        case "cat-camel":
+            return [Color(hex: "#8CB4A0"), Color(hex: "#5A8A72")]
+        case "bridge-pose":
+            return [Color(hex: "#A0B4D4"), Color(hex: "#6A8AB4")]
+        case "seated-spinal-twist":
+            return [Color(hex: "#C4A882"), Color(hex: "#A07850")]
+        case "piriformis-stretch":
+            return [Color(hex: "#B4A0C4"), Color(hex: "#8A70A0")]
+        case "lumbar-rotation":
+            return [Color(hex: "#A0C4B4"), Color(hex: "#5A8A7A")]
+        default:
+            return [WendTheme.Colors.greenLight, WendTheme.Colors.greenBasic]
+        }
+    }
+
+    private var bannerIcon: String {
+        switch definition.id {
+        case "cat-camel":          return "figure.flexibility"
+        case "bridge-pose":        return "figure.yoga"
+        case "seated-spinal-twist": return "figure.mind.and.body"
+        case "piriformis-stretch": return "figure.seated.seatbelt"
+        case "lumbar-rotation":    return "figure.roll"
+        default:                   return "figure.flexibility"
+        }
+    }
+}
+
+// MARK: - Preview
+
+#Preview {
+    NavigationStack {
+        ExerciseDetailView(
+            definition: StretchDefinition.sampleStretches[0],
+            isCompleted: false,
+            onStart: {}
+        )
+    }
+    .modelContainer(for: [SessionRecord.self, UserProfile.self, DailyTipCache.self], inMemory: true)
+}

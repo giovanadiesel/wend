@@ -1,23 +1,27 @@
 import SwiftUI
 import UIKit
 
-/// Card em destaque da rotina "Morning Stretch" com banner, badge Cream Light e botão de ação.
+/// Card em destaque da rotina "Morning Stretch" com banner, badge e botão de abertura da rotina.
 public struct FeaturedRoutineCardView: View {
     public var title: String
     public var description: String
     public var durationText: String
-    public var onStart: () -> Void
+    /// Número de exercícios na rotina (para mostrar no badge).
+    public var exerciseCount: Int
+    public var onViewRoutine: () -> Void
     
     public init(
         title: String = "Morning Stretch",
         description: String = "Wake up your body with gentle movements focused on the lower back.",
         durationText: String = "10 min",
-        onStart: @escaping () -> Void = {}
+        exerciseCount: Int = 5,
+        onViewRoutine: @escaping () -> Void = {}
     ) {
         self.title = title
         self.description = description
         self.durationText = durationText
-        self.onStart = onStart
+        self.exerciseCount = exerciseCount
+        self.onViewRoutine = onViewRoutine
     }
     
     public var body: some View {
@@ -59,11 +63,11 @@ public struct FeaturedRoutineCardView: View {
                         .lineSpacing(2)
                 }
                 
-                Button(action: onStart) {
+                Button(action: onViewRoutine) {
                     HStack(spacing: 8) {
-                        Image(systemName: WendSymbols.playStart)
+                        Image(systemName: "list.bullet.rectangle")
                             .font(.system(size: 14, weight: .bold))
-                        Text("Start")
+                        Text("View Routine · \(exerciseCount) exercises")
                             .font(.system(size: 16, weight: .bold))
                     }
                     .foregroundColor(WendTheme.Colors.creamLight)
@@ -73,6 +77,7 @@ public struct FeaturedRoutineCardView: View {
                     .clipShape(Capsule())
                 }
                 .buttonStyle(PlainButtonStyle())
+
             }
             .padding(18)
             .background(WendTheme.Colors.greenLight)

@@ -39,6 +39,10 @@ struct HomeView: View {
     @State private var pendingSession: PendingSession?
     /// Exercício selecionado para iniciar — aciona navegação para ExercisingView.
     @State private var exercisingDefinition: StretchDefinition?
+    /// Controla a sheet da rotina completa do dia.
+    @State private var showRoutineSheet = false
+    /// Exercício selecionado para detalhe individual — abre ExerciseDetailView via sheet.
+    @State private var selectedDetailDefinition: StretchDefinition?
 
     // MARK: - Dados Derivados (calculados a partir dos records reais)
 
@@ -50,6 +54,16 @@ struct HomeView: View {
             streakDays: store.streakDays,
             goalsCompleted: store.goalsCompletedToday,
             totalGoals: store.totalGoalsToday
+        )
+    }
+
+    /// IDs dos exercícios concluídos hoje (para repassar às views de rotina).
+    private var completedIDsToday: Set<String> {
+        let calendar = Calendar.current
+        return Set(
+            allRecords
+                .filter { calendar.isDateInToday($0.date) }
+                .map { $0.exerciseID }
         )
     }
 
@@ -69,31 +83,19 @@ struct HomeView: View {
 
                     StreakCardView(streak: streak)
 
-                    // Featured card: próximo exercício não feito hoje (ou o primeiro se todos concluídos)
-                    if let next = store.nextExercise {
-                        FeaturedRoutineCardView(
-                            title: next.name,
-                            description: next.instructions
-                                .components(separatedBy: .newlines)
-                                .first?
-                                .trimmingCharacters(in: .whitespaces) ?? next.instructions,
-                            durationText: durationLabel(for: next),
-                            onStart: {
-                                exercisingDefinition = next
-                            }
-                        )
-                    } else {
-                        allDoneCard
-                    }
-
-                    // Lista da rotina com status real de completude
-                    RoutineListView(
-                        items: store.routineItems,
-                        onItemToggle: { _ in
-                            // Somente leitura neste contexto — a conclusão real
-                            // ocorre via ExerciseSessionController ao salvar SessionRecord.
+                    // Featured card: abre a rotina completa
+                    FeaturedRoutineCardView(
+                        title: "Morning Stretch",
+                        description: "Wake up your body with gentle movements focused on the lower back.",
+                        durationText: totalDurationLabel,
+                        exerciseCount: StretchDefinition.sampleStretches.count,
+                        onViewRoutine: {
+                            showRoutineSheet = true
                         }
                     )
+
+                    // Lista da rotina com status real de completude e navegação individual
+                    routineListWithNavigation
 
                     TipCardView(tip: TipItem(
                         title: "Tip of the day",
@@ -120,11 +122,45 @@ struct HomeView: View {
         .fullScreenCover(isPresented: $showDebugCamera) {
             PoseTestView()
         }
+        .sheet(isPresented: $showRoutineSheet) {
+            TodayRoutineView(
+                definitions: StretchDefinition.sampleStretches,
+                completedIDs: completedIDsToday,
+                onStartExercise: { def in
+                    exercisingDefinition = def
+                }
+            )
+        }
+        .sheet(item: $selectedDetailDefinition) { def in
+            NavigationStack {
+                ExerciseDetailView(
+                    definition: def,
+                    isCompleted: completedIDsToday.contains(def.id),
+                    onStart: {
+                        selectedDetailDefinition = nil
+                        exercisingDefinition = def
+                    }
+                )
+                .toolbar {
+                    ToolbarItem(placement: .navigationBarTrailing) {
+                        Button {
+                            selectedDetailDefinition = nil
+                        } label: {
+                            Image(systemName: "xmark.circle.fill")
+                                .font(.system(size: 22))
+                                .foregroundStyle(
+                                    WendTheme.Colors.coffee.opacity(0.4),
+                                    WendTheme.Colors.coffee.opacity(0.08)
+                                )
+                        }
+                    }
+                }
+            }
+        }
         .sheet(item: $pendingSession) { pending in
             SessionSummaryView(record: pending.record, definition: pending.definition)
         }
         // Dispara refresh da dica quando os records ou o streak mudam.
-        // O service exibe a dica cacheada enquanto gera — transição silenciosa.
         .task(id: allRecords.count) {
             await tipService.refreshIfNeeded(
                 context: modelContext,
@@ -138,39 +174,56 @@ struct HomeView: View {
         } // NavigationStack
     }
 
-    // MARK: - Helpers de UI
+    // MARK: - Routine List with Per-Row Navigation
 
-    private func durationLabel(for stretch: StretchDefinition) -> String {
-        let totalSeconds = stretch.holdDuration * 3 // 3 reps padrão
-        let mins = Int(totalSeconds) / 60
-        return mins > 0 ? "\(mins) min" : "\(Int(totalSeconds)) sec"
+    /// Lista da rotina onde cada row abre o ExerciseDetailView individual.
+    private var routineListWithNavigation: some View {
+        VStack(alignment: .leading, spacing: 14) {
+            Text("Today's routine")
+                .font(.system(size: 20, weight: .bold))
+                .foregroundColor(WendTheme.Colors.coffee)
+
+            VStack(spacing: 0) {
+                let items = store.routineItems
+                ForEach(Array(items.enumerated()), id: \.element.id) { index, item in
+                    // Encontra a StretchDefinition correspondente pelo título
+                    let def = StretchDefinition.sampleStretches.first { $0.name == item.title }
+
+                    Button {
+                        if let def { selectedDetailDefinition = def }
+                    } label: {
+                        RoutineRowView(item: item)
+                            .contentShape(Rectangle())
+                    }
+                    .buttonStyle(PlainButtonStyle())
+                    .disabled(def == nil)
+
+                    if index < items.count - 1 {
+                        Divider()
+                            .background(WendTheme.Colors.coffee.opacity(0.1))
+                            .padding(.leading, 40)
+                    }
+                }
+            }
+            .padding(.horizontal, 16)
+            .padding(.vertical, 8)
+            .background(WendTheme.Colors.creamLight)
+            .clipShape(RoundedRectangle(cornerRadius: 24, style: .continuous))
+        }
     }
 
-    /// Card exibido quando todos os exercícios do dia foram concluídos.
-    private var allDoneCard: some View {
-        VStack(spacing: 12) {
-            Image(systemName: "checkmark.seal.fill")
-                .font(.system(size: 40))
-                .foregroundColor(WendTheme.Colors.greenBasic)
-            Text("All done for today! 🎉")
-                .font(.system(size: 18, weight: .bold))
-                .foregroundColor(WendTheme.Colors.coffee)
-            Text("Come back tomorrow for your next session.")
-                .font(.caption)
-                .foregroundColor(WendTheme.Colors.coffee.opacity(0.6))
-                .multilineTextAlignment(.center)
-        }
-        .frame(maxWidth: .infinity)
-        .padding(28)
-        .background(WendTheme.Colors.greenLight)
-        .clipShape(RoundedRectangle(cornerRadius: 24, style: .continuous))
+    // MARK: - Helpers de UI
+
+    /// Duração total estimada da rotina (soma de holdDuration × 3 reps de cada exercício).
+    private var totalDurationLabel: String {
+        let totalSecs = StretchDefinition.sampleStretches.reduce(0.0) { $0 + $1.holdDuration * 3 }
+        let mins = Int(totalSecs) / 60
+        return mins > 0 ? "\(mins) min" : "\(Int(totalSecs)) sec"
     }
 
     // MARK: - Persistência de Sessão
 
     /// Salva um `SessionRecord` no ModelContext e aciona a exibição do resumo.
-    ///
-    /// Chamado pelo closure `onSessionFinished` do `ExerciseSessionController`.
     func saveSessionRecord(
         for stretch: StretchDefinition,
         holdDurationAchieved: TimeInterval,
@@ -184,7 +237,6 @@ struct HomeView: View {
             withinRangePercentage: withinRangePercentage
         )
         modelContext.insert(record)
-        // Apresenta o resumo com feedback de IA imediatamente após salvar.
         pendingSession = PendingSession(record: record, definition: stretch)
     }
 }
@@ -195,3 +247,5 @@ struct HomeView: View {
     HomeView()
         .modelContainer(for: [SessionRecord.self, UserProfile.self, DailyTipCache.self], inMemory: true)
 }
+
+

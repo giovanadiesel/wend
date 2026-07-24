@@ -11,6 +11,8 @@ public struct StretchDefinition: Identifiable, Hashable, Sendable {
     public let name: String
     /// Passo a passo instrucional do exercício.
     public let instructions: String
+    /// Dica de respiração exibida no ExerciseDetailView.
+    public let breathingTip: String?
     /// Tempo (em segundos) que o usuário deve manter a posição.
     public let holdDuration: TimeInterval
     /// Conjunto de regras de ângulo articular que definem a postura correta.
@@ -20,12 +22,14 @@ public struct StretchDefinition: Identifiable, Hashable, Sendable {
         id: String,
         name: String,
         instructions: String,
+        breathingTip: String? = nil,
         holdDuration: TimeInterval,
         targetJoints: [JointAngleRule] = []
     ) {
         self.id = id
         self.name = name
         self.instructions = instructions
+        self.breathingTip = breathingTip
         self.holdDuration = holdDuration
         self.targetJoints = targetJoints
     }
@@ -42,151 +46,159 @@ extension StretchDefinition {
     static let sampleStretches: [StretchDefinition] = [
 
         // ── 1. Cat Camel ────────────────────────────────────────────────────────
-        // Foco: flexão/extensão da coluna. Avalia o ângulo ombro–quadril–joelho
-        // no plano lateral (vista de lado) para confirmar o arco de movimento.
-        //
-        // Dados observados (conf ≥ 0.3):
-        //   How to do the cat camel.mp4  → P10–P90: 111°–123° (260 frames válidos)
-        //   video_1280x720-2.mp4         → P10–P90: 112°–126° (151 frames válidos)
-        //   Consenso: 110°–135° (inclui fase de extensão máxima ~135°)
+        // Calibrado: P10–P90 110°–126° (conf ≥ 0.3, 2 vídeos)
         StretchDefinition(
             id: "cat-camel",
             name: "Cat Camel",
             instructions: """
-            Posicione-se em quatro apoios (mãos e joelhos). \
-            Inspire arqueando as costas para baixo (cat) e expire arqueando para cima (camel). \
-            Mantenha o pescoço neutro. Repita lentamente.
+            Start on your hands and knees with your back in a neutral position, \
+            wrists directly under your shoulders and knees under your hips.
+
+            Slowly arch your back — lift your head, open your chest and push your \
+            tailbone out, letting your spine dip into a gentle curve (Cat position). \
+            Hold for a moment.
+
+            Then reverse the movement: tuck your chin to your chest, draw your belly \
+            button in toward your spine and curl your tailbone under, rounding your \
+            back toward the ceiling (Camel position). Hold, then repeat the cycle slowly.
             """,
+            breathingTip: "Inhale as you arch into Cat, letting your belly drop. Exhale fully as you round into Camel, drawing your core in. Let your breath guide the pace — never rush the movement.",
             holdDuration: 5,
             targetJoints: [
                 // rightShoulder → rightHip (vértice) → rightKnee
-                // Faixa calibrada: P10–P90 de 2 vídeos com boa detecção
                 JointAngleRule(
                     jointA: .rightShoulder,
                     jointB: .rightHip,
                     jointC: .rightKnee,
                     acceptableRange: 110.0...135.0,
-                    mistakeHint: "Amplie o movimento — o arco do tronco está insuficiente."
+                    mistakeHint: "Increase your range — the arc through your spine needs to be bigger."
                 ),
             ]
         ),
 
         // ── 2. Bridge Pose ──────────────────────────────────────────────────────
-        // Foco: extensão do quadril com ativação de glúteo.
-        // Exercício supino — Vision detecta melhor a flexão do joelho antes do lift.
-        //
-        // Dados observados (conf ≥ 0.3):
-        //   video_1280x720-2.mp4 → P10–P90: 38°–52° (167 frames) — fase de setup
-        //   bridge pose yoga.mp4 → P10–P90: 27°–66° (257 frames) — inclui subida/descida
-        //   Nota: ângulo no hold (quadril elevado, joelho ~90°) não capturado nos vídeos.
-        //   Faixa estimada para hold: 80°–110° (validar na PoseTestView ao vivo).
+        // Calibrado: P10–P90 38°–52° (fase de setup); hold estimado 80°–110°
+        // TODO: validar ângulo de hold na PoseTestView
         StretchDefinition(
             id: "bridge-pose",
             name: "Bridge Pose",
             instructions: """
-            Deite de costas com joelhos dobrados e pés no chão. \
-            Eleve o quadril até ombros, quadril e joelhos formarem uma linha reta. \
-            Contraia os glúteos e mantenha a posição.
+            Lie on your back with your knees bent and your feet flat on the floor, \
+            hip-width apart. Let your arms rest alongside your body, palms facing down.
+
+            Gently tilt your pelvis to imprint your lower back against the floor. \
+            Pressing through your feet, slowly lift your hips until your shoulders, \
+            hips and knees form a straight line. Squeeze your glutes at the top and \
+            hold the position.
+
+            To come down, keep your navel drawn in and lower your spine back to the \
+            floor one vertebra at a time — from the upper back all the way down to \
+            your tailbone. Release your glutes only once your pelvis rests on the floor.
             """,
+            breathingTip: "Inhale to prepare. Exhale as you lift your hips, engaging your core and glutes. Breathe steadily at the top — avoid holding your breath. Inhale as you slowly lower back down.",
             holdDuration: 15,
             targetJoints: [
                 // rightHip → rightKnee (vértice) → rightAnkle
-                // Faixa estimada para posição de hold (joelho ~90°)
                 // TODO: validar na PoseTestView — exercício supino dificulta calibração por vídeo
                 JointAngleRule(
                     jointA: .rightHip,
                     jointB: .rightKnee,
                     jointC: .rightAnkle,
                     acceptableRange: 80.0...110.0,
-                    mistakeHint: "Ajuste os pés — o joelho deve formar ~90° com o chão."
+                    mistakeHint: "Adjust your foot position — your knee should be at roughly 90° to the floor."
                 ),
             ]
         ),
 
         // ── 3. Seated Spinal Twist ──────────────────────────────────────────────
-        // Foco: rotação do tronco. Avalia o ângulo formado entre ombro esquerdo,
-        // ombro direito (vértice) e quadril direito — mede o twist lateral.
-        //
-        // Dados observados (conf ≥ 0.3):
-        //   Seated Spinal Twist - CORE.mp4 → P10–P90: 86°–127° (736/792 frames — excelente)
-        //   Seated Spinal Twist.mp4        → P10–P90: 91°–93°  (152 frames — posição neutra)
-        //   video_1280x720-2.mp4           → P10–P90: 79°–85°  (120/120 frames — fase inicial)
-        //   Consenso: faixa de rotação ativa é 80°–130°
+        // Calibrado: P10–P90 86°–127° (736/792 frames — excelente detecção)
         StretchDefinition(
             id: "seated-spinal-twist",
             name: "Seated Spinal Twist",
             instructions: """
-            Sente-se com as pernas estendidas. Cruze o joelho direito dobrado sobre a \
-            perna esquerda. Coloque o cotovelo esquerdo fora do joelho direito e gire \
-            o tronco para a direita. Mantenha a coluna ereta durante o twist.
+            Sit upright on a chair or bench with both feet flat on the floor.
+
+            Cross your right ankle over your left knee, letting your right foot rest \
+            comfortably on the thigh. Sit tall, lengthening through the top of your head.
+
+            Gently draw your right knee inward and toward the opposite shoulder while \
+            keeping both sitting bones in contact with the seat — this subtle movement \
+            deepens the rotation in the hip and lower back. \
+            Place your left hand on the outside of your right knee for a gentle guide, \
+            and rest your right hand behind you for support.
+
+            Hold the twist, then repeat on the other side.
             """,
+            breathingTip: "Inhale to sit taller and create space in your spine. Exhale to gently deepen the twist — never force the rotation. With each breath cycle, imagine growing an inch taller before rotating a little further.",
             holdDuration: 20,
             targetJoints: [
                 // leftShoulder → rightShoulder (vértice) → rightHip
-                // Faixa calibrada: cobre posição neutra (80°) até twist completo (130°)
                 JointAngleRule(
                     jointA: .leftShoulder,
                     jointB: .rightShoulder,
                     jointC: .rightHip,
                     acceptableRange: 80.0...130.0,
-                    mistakeHint: "Gire mais o tronco — mantenha o quadril estável e o ombro afastado do quadril."
+                    mistakeHint: "Rotate further — keep your hips stable and gently guide your shoulder away from your hip."
                 ),
             ]
         ),
 
         // ── 4. Seated Piriformis Stretch ────────────────────────────────────────
-        // Foco: rotação externa do quadril, alongando o músculo piriforme.
-        // Avalia o ângulo joelho direito–quadril direito (vértice)–joelho esquerdo.
-        //
-        // Dados observados (conf ≥ 0.3):
-        //   Seated Piriformis Stretch.mp4 → P10–P90: 65°–120° (211/319 frames)
-        //   MedBridge.mp4                 → P10–P90: 29°–114° (165/311 frames — inclui cruzamento)
-        //   Consenso: posição de hold ativo ≈ 65°–120°
+        // Calibrado: P10–P90 65°–120° (211/319 frames)
         StretchDefinition(
             id: "piriformis-stretch",
             name: "Piriformis Stretch",
             instructions: """
-            Sente-se em uma cadeira. Cruze o tornozelo direito sobre o joelho esquerdo \
-            formando o número 4. Incline levemente o tronco para frente mantendo as \
-            costas retas. Sinta o alongamento no glúteo direito. Troque o lado após o tempo.
+            Start seated on a chair with both feet flat on the floor and your spine tall.
+
+            Cross your right ankle over your left knee, so that your right ankle rests \
+            on your left thigh — forming the shape of the number 4.
+
+            Apply gentle downward pressure to your right knee with your right hand to \
+            encourage the hip to open. Then, keeping your back straight, slowly hinge \
+            forward at the hips until you feel a comfortable stretch deep in your right \
+            glute and hip. Avoid rounding your lower back.
+
+            Hold the position with a comfortable tension — you should feel a stretch, \
+            not pain. Repeat on the other side.
             """,
+            breathingTip: "Take a slow, deep inhale before leaning forward. As you exhale, gently fold deeper into the stretch — let the out-breath release tension. Keep breathing steadily throughout the hold; shallow breathing increases muscle guarding.",
             holdDuration: 30,
             targetJoints: [
                 // rightKnee → rightHip (vértice) → leftKnee
-                // Faixa calibrada: P10–P90 do vídeo com detecção mais consistente
                 JointAngleRule(
                     jointA: .rightKnee,
                     jointB: .rightHip,
                     jointC: .leftKnee,
                     acceptableRange: 60.0...120.0,
-                    mistakeHint: "Incline o tronco para frente — isso aprofunda o alongamento do piriforme."
+                    mistakeHint: "Lean slightly forward from the hips — this deepens the piriformis stretch."
                 ),
             ]
         ),
 
         // ── 5. Lumbar Rotation ──────────────────────────────────────────────────
-        // Exercício executado em posição **supina** com swiss ball.
-        // O VNDetectHumanBodyPoseRequest é treinado para poses verticais e não
-        // consegue mapear joints com confiança em posição horizontal — confirmado
-        // na análise de 3 vídeos (0 frames válidos em todos).
-        //
-        // Solução: `targetJoints` vazio → modo time-only no ExerciseSessionController.
-        // O cronômetro inicia imediatamente; o usuário mantém a posição pelo
-        // holdDuration sem validação de ângulo. PRECISION na sessão será 100%.
+        // Exercício supino com swiss ball — VNDetectHumanBodyPoseRequest não detecta
+        // joints com confiança em posição horizontal (0/3 vídeos geraram dados).
+        // Modo time-only: cronômetro inicia imediatamente, sem validação de ângulo.
         StretchDefinition(
             id: "lumbar-rotation",
             name: "Lumbar Rotation",
             instructions: """
-            Deite de costas com os joelhos dobrados e os pés no chão. \
-            Mantenha os ombros no chão e deixe os joelhos caírem lentamente \
-            para um lado. Segure a posição e volte ao centro antes de trocar.
+            Lie on your back on the floor with your knees and hips bent, \
+            placing your lower legs on top of an exercise ball.
+
+            Keep your upper body relaxed and your arms resting out to the sides \
+            for stability. Slowly roll the ball to the right, allowing your lower \
+            back to rotate gently in that direction.
+
+            Hold for 3 seconds, then roll the ball back through the center and \
+            over to the left side. Repeat 10 times in each direction, moving \
+            slowly and with control throughout.
             """,
+            breathingTip: "Inhale to prepare at center. Exhale slowly as you roll the ball to one side, letting your lower back soften into the rotation. Inhale as you return to center. The breath helps your muscles release — never force the rotation.",
             holdDuration: 20,
             targetJoints: [] // Exercício supino — rastreio por tempo (sem ângulo)
         ),
 
     ]
 }
-
-
-
