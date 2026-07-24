@@ -18,7 +18,8 @@ struct Wend_IAApp: App {
     static let sharedModelContainer: ModelContainer = {
         let schema = Schema([
             SessionRecord.self,
-            UserProfile.self
+            UserProfile.self,
+            DailyTipCache.self,
         ])
         let configuration = ModelConfiguration(
             schema: schema,

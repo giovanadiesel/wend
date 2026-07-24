@@ -31,10 +31,8 @@ struct HomeView: View {
     // MARK: - State Local
 
     @State private var selectedTab: WendTab = .exercise
-    @State private var tip = TipItem(
-        title: "Tip of the day",
-        text: "Remember to breathe deeply during exercises. Breathing helps to relax the muscles."
-    )
+    /// Serviço de dica diária — mantém a dica atual e aciona geração em background quando necessário.
+    @State private var tipService = DailyTipService()
     // TODO: Remover antes do release
     @State private var showDebugCamera = false
     /// Sessão recém-concluída aguardando exibição do resumo. `nil` quando nenhuma.
@@ -95,7 +93,10 @@ struct HomeView: View {
                         }
                     )
 
-                    TipCardView(tip: tip)
+                    TipCardView(tip: TipItem(
+                        title: "Tip of the day",
+                        text: tipService.currentMessage
+                    ))
 
                     // ── DEBUG: Remover antes do release ──────────────────
                     Button { showDebugCamera = true } label: {
@@ -119,6 +120,15 @@ struct HomeView: View {
         }
         .sheet(item: $pendingSession) { pending in
             SessionSummaryView(record: pending.record, definition: pending.definition)
+        }
+        // Dispara refresh da dica quando os records ou o streak mudam.
+        // O service exibe a dica cacheada enquanto gera — transição silenciosa.
+        .task(id: allRecords.count) {
+            await tipService.refreshIfNeeded(
+                context: modelContext,
+                records: allRecords,
+                streak: store.streakDays
+            )
         }
     }
 
@@ -177,5 +187,5 @@ struct HomeView: View {
 
 #Preview {
     HomeView()
-        .modelContainer(for: [SessionRecord.self, UserProfile.self], inMemory: true)
+        .modelContainer(for: [SessionRecord.self, UserProfile.self, DailyTipCache.self], inMemory: true)
 }
