@@ -5,7 +5,7 @@ import Vision
 ///
 /// Contém as instruções textuais e as regras angulares que serão usadas pelo módulo de
 /// visão computacional para validar a postura do usuário em tempo real.
-public struct StretchDefinition: Identifiable, Sendable {
+public struct StretchDefinition: Identifiable, Hashable, Sendable {
     public let id: String
     /// Nome exibido ao usuário.
     public let name: String

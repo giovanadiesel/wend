@@ -37,6 +37,8 @@ struct HomeView: View {
     @State private var showDebugCamera = false
     /// Sessão recém-concluída aguardando exibição do resumo. `nil` quando nenhuma.
     @State private var pendingSession: PendingSession?
+    /// Exercício selecionado para iniciar — aciona navegação para ExercisingView.
+    @State private var exercisingDefinition: StretchDefinition?
 
     // MARK: - Dados Derivados (calculados a partir dos records reais)
 
@@ -54,6 +56,7 @@ struct HomeView: View {
     // MARK: - Body
 
     var body: some View {
+        NavigationStack {
         ZStack(alignment: .bottom) {
             WendTheme.Colors.creamBasic
                 .ignoresSafeArea()
@@ -76,8 +79,7 @@ struct HomeView: View {
                                 .trimmingCharacters(in: .whitespaces) ?? next.instructions,
                             durationText: durationLabel(for: next),
                             onStart: {
-                                // TODO: Navegar para a tela de sessão do exercício `next`
-                                print("Iniciando: \(next.name)")
+                                exercisingDefinition = next
                             }
                         )
                     } else {
@@ -130,6 +132,10 @@ struct HomeView: View {
                 streak: store.streakDays
             )
         }
+        .navigationDestination(item: $exercisingDefinition) { def in
+            ExercisingView(definition: def)
+        }
+        } // NavigationStack
     }
 
     // MARK: - Helpers de UI

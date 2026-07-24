@@ -4,7 +4,7 @@ import Vision
 /// Regra de ângulo articular usada para avaliar a postura do usuário via Vision framework.
 ///
 /// O ângulo é calculado entre os pontos `jointA–jointB–jointC`, sendo `jointB` o vértice.
-public struct JointAngleRule: Sendable {
+public struct JointAngleRule: Hashable, Sendable {
     /// Primeira extremidade do ângulo.
     public let jointA: VNHumanBodyPoseObservation.JointName
     /// Vértice do ângulo (ponto central entre jointA e jointC).
