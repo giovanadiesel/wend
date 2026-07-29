@@ -65,7 +65,7 @@ struct ExerciseDetailView: View {
                             }
                         }
 
-                        // Editar metas do exercício
+                        // Editar metas do exercício (botões - e + customizados para iOS físico)
                         customizationBlock
 
                         // Stats rápidos
@@ -108,7 +108,7 @@ struct ExerciseDetailView: View {
             color: WendTheme.Colors.greenDark
         ) {
             VStack(spacing: 14) {
-                // Hold Duration Stepper
+                // Hold Duration Stepper (- e +)
                 HStack {
                     VStack(alignment: .leading, spacing: 2) {
                         Text("Hold duration")
@@ -119,24 +119,19 @@ struct ExerciseDetailView: View {
                             .foregroundColor(WendTheme.Colors.coffee.opacity(0.6))
                     }
                     Spacer()
-                    Stepper(
-                        value: Binding(
-                            get: { currentHoldDuration },
-                            set: { routineManager.updateHoldDuration($0, for: definition.id) }
-                        ),
-                        in: 5...120,
+                    customStepper(
+                        value: Int(currentHoldDuration),
+                        unit: "s",
+                        range: 5...120,
                         step: 5
-                    ) {
-                        Text("\(Int(currentHoldDuration))s")
-                            .font(.system(size: 15, weight: .bold))
-                            .foregroundColor(WendTheme.Colors.greenDark)
+                    ) { newValue in
+                        routineManager.updateHoldDuration(Double(newValue), for: definition.id)
                     }
-                    .labelsHidden()
                 }
 
                 Divider()
 
-                // Repetitions Stepper
+                // Repetitions Stepper (- e +)
                 HStack {
                     VStack(alignment: .leading, spacing: 2) {
                         Text("Target repetitions")
@@ -147,20 +142,70 @@ struct ExerciseDetailView: View {
                             .foregroundColor(WendTheme.Colors.coffee.opacity(0.6))
                     }
                     Spacer()
-                    Stepper(
-                        value: Binding(
-                            get: { currentReps },
-                            set: { routineManager.updateTargetReps($0, for: definition.id) }
-                        ),
-                        in: 1...10
-                    ) {
-                        Text("\(currentReps)×")
-                            .font(.system(size: 15, weight: .bold))
-                            .foregroundColor(WendTheme.Colors.greenDark)
+                    customStepper(
+                        value: currentReps,
+                        unit: "×",
+                        range: 1...10,
+                        step: 1
+                    ) { newValue in
+                        routineManager.updateTargetReps(newValue, for: definition.id)
                     }
-                    .labelsHidden()
                 }
             }
+        }
+    }
+
+    // MARK: - Custom Stepper Control (- e +)
+
+    private func customStepper(
+        value: Int,
+        unit: String,
+        range: ClosedRange<Int>,
+        step: Int = 1,
+        onChange: @escaping (Int) -> Void
+    ) -> some View {
+        HStack(spacing: 8) {
+            // Botão Menos (-)
+            Button {
+                let newValue = max(range.lowerBound, value - step)
+                if newValue != value {
+                    UIImpactFeedbackGenerator(style: .light).impactOccurred()
+                    onChange(newValue)
+                }
+            } label: {
+                Image(systemName: "minus")
+                    .font(.system(size: 13, weight: .bold))
+                    .foregroundColor(value > range.lowerBound ? WendTheme.Colors.greenDark : WendTheme.Colors.coffee.opacity(0.3))
+                    .frame(width: 32, height: 32)
+                    .background(value > range.lowerBound ? WendTheme.Colors.greenLight : WendTheme.Colors.creamBasic)
+                    .clipShape(Circle())
+            }
+            .buttonStyle(PlainButtonStyle())
+            .disabled(value <= range.lowerBound)
+
+            // Valor atual
+            Text("\(value)\(unit)")
+                .font(.system(size: 15, weight: .bold))
+                .foregroundColor(WendTheme.Colors.coffee)
+                .frame(minWidth: 38, alignment: .center)
+
+            // Botão Mais (+)
+            Button {
+                let newValue = min(range.upperBound, value + step)
+                if newValue != value {
+                    UIImpactFeedbackGenerator(style: .light).impactOccurred()
+                    onChange(newValue)
+                }
+            } label: {
+                Image(systemName: "plus")
+                    .font(.system(size: 13, weight: .bold))
+                    .foregroundColor(value < range.upperBound ? WendTheme.Colors.creamLight : WendTheme.Colors.coffee.opacity(0.3))
+                    .frame(width: 32, height: 32)
+                    .background(value < range.upperBound ? WendTheme.Colors.greenDark : WendTheme.Colors.creamBasic)
+                    .clipShape(Circle())
+            }
+            .buttonStyle(PlainButtonStyle())
+            .disabled(value >= range.upperBound)
         }
     }
 
