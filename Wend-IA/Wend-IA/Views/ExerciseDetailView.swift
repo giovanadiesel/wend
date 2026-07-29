@@ -27,7 +27,7 @@ struct ExerciseDetailView: View {
         ZStack(alignment: .bottom) {
             WendTheme.Colors.creamBasic.ignoresSafeArea()
 
-            ScrollView(.vertical, showsIndicators: false) {
+            BlurTopScrollView {
                 VStack(alignment: .leading, spacing: 0) {
 
                     // ── Banner ─────────────────────────────────────────────────

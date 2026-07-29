@@ -77,66 +77,64 @@ struct ExercisingView: View {
     // MARK: - Body
 
     var body: some View {
-        GeometryReader { geo in
-            ZStack(alignment: .bottom) {
+        ZStack(alignment: .bottom) {
 
-                // ── 1. Preview câmera ──────────────────────────────────────────
-                CameraPreviewView(session: camera.session)
-                    .ignoresSafeArea()
-
-                // ── 2. Overlay de pontos de pose ───────────────────────────────
-                if let ctrl = controller {
-                    PoseOverlayView(
-                        joints: analyzer.detectedJoints,
-                        evaluations: ctrl.evaluations,
-                        rules: currentDefinition.targetJoints
-                    )
-                    .ignoresSafeArea()
-                    .allowsHitTesting(false)
-                }
-
-                // ── 3. Botão fechar (canto superior esquerdo) ──────────────────
-                VStack {
-                    HStack {
-                        closeButton
-                        Spacer()
-                    }
-                    .padding(.top, geo.safeAreaInsets.top + 12)
-                    .padding(.leading, 16)
-                    Spacer()
-                }
+            // ── 1. Preview câmera ──────────────────────────────────────────
+            CameraPreviewView(session: camera.session)
                 .ignoresSafeArea()
 
-                // ── 4. Card inferior flutuante ─────────────────────────────────
-                if let ctrl = controller {
-                    BottomSessionCard(
-                        definition: currentDefinition,
-                        controller: ctrl,
-                        currentIndex: currentIndex,
-                        totalCount: stretches.count,
-                        isRoutineFlow: isRoutineFlow,
-                        onFinishExercise: {
-                            ctrl.finishEarly()
-                        }
-                    )
-                    .gesture(
-                        DragGesture(minimumDistance: 30)
-                            .onEnded { value in
-                                guard isRoutineFlow else { return }
-                                if value.translation.width < -50 {
-                                    advanceToNextExercise()
-                                } else if value.translation.width > 50 {
-                                    goToPreviousExercise()
-                                }
-                            }
-                    )
-                    .padding(.horizontal, 16)
-                    .padding(.bottom, geo.safeAreaInsets.bottom + 16)
-                    .transition(.move(edge: .bottom).combined(with: .opacity))
+            // ── 2. Overlay de pontos de pose ───────────────────────────────
+            if let ctrl = controller {
+                PoseOverlayView(
+                    joints: analyzer.detectedJoints,
+                    evaluations: ctrl.evaluations,
+                    rules: currentDefinition.targetJoints
+                )
+                .ignoresSafeArea()
+                .allowsHitTesting(false)
+            }
+
+            // ── 3. Botão fechar (canto superior esquerdo) ──────────────────
+            // Sem `.ignoresSafeArea()` aqui: fica posicionado respeitando a
+            // safe area (dynamic island/status bar) automaticamente.
+            VStack {
+                HStack {
+                    closeButton
+                    Spacer()
                 }
+                .padding(.top, 12)
+                .padding(.leading, 16)
+                Spacer()
+            }
+
+            // ── 4. Card inferior flutuante ─────────────────────────────────
+            if let ctrl = controller {
+                BottomSessionCard(
+                    definition: currentDefinition,
+                    controller: ctrl,
+                    currentIndex: currentIndex,
+                    totalCount: stretches.count,
+                    isRoutineFlow: isRoutineFlow,
+                    onFinishExercise: {
+                        ctrl.finishEarly()
+                    }
+                )
+                .gesture(
+                    DragGesture(minimumDistance: 30)
+                        .onEnded { value in
+                            guard isRoutineFlow else { return }
+                            if value.translation.width < -50 {
+                                advanceToNextExercise()
+                            } else if value.translation.width > 50 {
+                                goToPreviousExercise()
+                            }
+                        }
+                )
+                .padding(.horizontal, 16)
+                .padding(.bottom, 16)
+                .transition(.move(edge: .bottom).combined(with: .opacity))
             }
         }
-        .ignoresSafeArea()
         .statusBarHidden(true)
         .task {
             setupSession()
@@ -249,31 +247,12 @@ struct ExercisingView: View {
     // MARK: - Close Button
 
     private var closeButton: some View {
-        Button {
+        DismissGlassButton {
             camera.stop()
             analyzer.disconnect()
             controller?.stop()
             dismiss()
-        } label: {
-            ZStack {
-                ZStack {
-                    Circle().fill(.ultraThinMaterial)
-                    WendTheme.Colors.creamBasic.opacity(0.75)
-                }
-                .clipShape(Circle())
-                .overlay(
-                    Circle()
-                        .stroke(Color.white.opacity(0.4), lineWidth: 1)
-                )
-
-                Image(systemName: "xmark")
-                    .font(.system(size: 15, weight: .bold))
-                    .foregroundColor(WendTheme.Colors.coffee)
-            }
-            .frame(width: 44, height: 44)
-            .shadow(color: Color.black.opacity(0.12), radius: 8, x: 0, y: 4)
         }
-        .buttonStyle(PlainButtonStyle())
     }
 }
 

@@ -52,7 +52,7 @@ struct SessionSummaryView: View {
             ZStack {
                 WendTheme.Colors.creamBasic.ignoresSafeArea()
 
-                ScrollView(.vertical, showsIndicators: false) {
+                BlurTopScrollView {
                     VStack(spacing: 24) {
                         completionHeader
                         statsGrid

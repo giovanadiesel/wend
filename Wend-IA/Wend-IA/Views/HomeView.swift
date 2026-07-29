@@ -85,34 +85,17 @@ struct HomeView: View {
                 WendTheme.Colors.creamBasic
                     .ignoresSafeArea()
 
-                ScrollView(.vertical, showsIndicators: false) {
-                    VStack(alignment: .leading, spacing: 22) {
-
-                        HeaderView(userName: "Giovana")
-                            .padding(.top, 8)
-
-                        StreakCardView(streak: streak)
-
-                        // Featured card: botão START inicia a rotina completa
-                        FeaturedRoutineCardView(
-                            title: "Lower Back",
-                            description: "Wake up your body with gentle movements focused on the lower back.",
-                            durationText: totalDurationLabel,
-                            onStart: {
-                                startFullRoutineSession()
-                            }
-                        )
-
-                        // Lista da rotina interativa (swipe para excluir/editar + botão +)
-                        routineListSection
-
-                        TipCardView(tip: TipItem(
-                            title: "Tip of the day",
-                            text: tipService.currentMessage
-                        ))
+                Group {
+                    switch selectedTab {
+                    case .exercise:
+                        exerciseTabContent
+                    case .progress:
+                        WendProgressView()
+                    case .profile:
+                        // Tela de Profile ainda não implementada — mantém o
+                        // conteúdo de Exercise por ora, sem regressão de comportamento.
+                        exerciseTabContent
                     }
-                    .padding(.horizontal, 20)
-                    .padding(.bottom, 100)
                 }
 
                 CustomTabBarView(selectedTab: $selectedTab)
@@ -130,17 +113,11 @@ struct HomeView: View {
                     )
                     .toolbar {
                         ToolbarItem(placement: .navigationBarTrailing) {
-                            Button {
+                            DismissGlassButton {
                                 selectedDetailDefinition = nil
-                            } label: {
-                                Image(systemName: "xmark.circle.fill")
-                                    .font(.system(size: 22))
-                                    .foregroundStyle(
-                                        WendTheme.Colors.coffee.opacity(0.4),
-                                        WendTheme.Colors.coffee.opacity(0.08)
-                                    )
                             }
                         }
+                        .sharedBackgroundVisibility(.hidden)
                     }
                 }
             }
@@ -166,6 +143,40 @@ struct HomeView: View {
                 )
             }
         } // NavigationStack
+    }
+
+    // MARK: - Exercise Tab Content
+
+    private var exerciseTabContent: some View {
+        BlurTopScrollView {
+            VStack(alignment: .leading, spacing: 22) {
+
+                HeaderView(userName: "Giovana")
+                    .padding(.top, 8)
+
+                StreakCardView(streak: streak)
+
+                // Featured card: botão START inicia a rotina completa
+                FeaturedRoutineCardView(
+                    title: "Lower Back",
+                    description: "Wake up your body with gentle movements focused on the lower back.",
+                    durationText: totalDurationLabel,
+                    onStart: {
+                        startFullRoutineSession()
+                    }
+                )
+
+                // Lista da rotina interativa (swipe para excluir/editar + botão +)
+                routineListSection
+
+                TipCardView(tip: TipItem(
+                    title: "Tip of the day",
+                    text: tipService.currentMessage
+                ))
+            }
+            .padding(.horizontal, 20)
+            .padding(.bottom, 100)
+        }
     }
 
     // MARK: - Routine List Section

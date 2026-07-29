@@ -32,7 +32,7 @@ struct TodayRoutineView: View {
             ZStack {
                 WendTheme.Colors.creamBasic.ignoresSafeArea()
 
-                ScrollView(.vertical, showsIndicators: false) {
+                BlurTopScrollView {
                     VStack(alignment: .leading, spacing: 0) {
 
                         // ── Header ─────────────────────────────────────────────
@@ -65,17 +65,11 @@ struct TodayRoutineView: View {
             .navigationBarTitleDisplayMode(.large)
             .toolbar {
                 ToolbarItem(placement: .navigationBarTrailing) {
-                    Button {
+                    DismissGlassButton {
                         dismiss()
-                    } label: {
-                        Image(systemName: "xmark.circle.fill")
-                            .font(.system(size: 22))
-                            .foregroundStyle(
-                                WendTheme.Colors.coffee.opacity(0.4),
-                                WendTheme.Colors.coffee.opacity(0.08)
-                            )
                     }
                 }
+                .sharedBackgroundVisibility(.hidden)
             }
             .navigationDestination(item: $selectedDefinition) { def in
                 ExerciseDetailView(
