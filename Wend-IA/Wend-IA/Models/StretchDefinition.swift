@@ -201,9 +201,10 @@ extension StretchDefinition {
             for stability. Slowly roll the ball to the right, allowing your lower \
             back to rotate gently in that direction.
 
-            Hold for 3 seconds, then roll the ball back through the center and \
-            over to the left side. Repeat 10 times in each direction, moving \
-            slowly and with control throughout.
+            Hold briefly, then roll the ball back through the center and over to \
+            the left side. Repeat at your own pace in each direction, moving \
+            slowly and with control throughout — your hold time and reps are set \
+            in your routine, so adjust them anytime to match your comfort.
             """,
             breathingTip: "Inhale to prepare at center. Exhale slowly as you roll the ball to one side, letting your lower back soften into the rotation. Inhale as you return to center. The breath helps your muscles release — never force the rotation.",
             holdDuration: 20,

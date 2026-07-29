@@ -15,13 +15,16 @@ private struct PendingSession: Identifiable {
     }
 }
 
-/// Tela principal do Wend — dados derivados dos `SessionRecord` reais via SwiftData e `RoutineManager`.
+/// Tela principal do Wend — dados derivados dos `SessionRecord`/`UserProfile` reais via
+/// SwiftData e do `RoutineManager` (hold/reps personalizados).
 struct HomeView: View {
 
     // MARK: - SwiftData
 
     @Query(sort: \SessionRecord.date, order: .reverse)
     private var allRecords: [SessionRecord]
+
+    @Query private var profiles: [UserProfile]
 
     @Environment(\.modelContext) private var modelContext
 
@@ -51,6 +54,8 @@ struct HomeView: View {
 
     // MARK: - Dados Derivados
 
+    private var profile: UserProfile? { profiles.first }
+
     private var streak: UserStreak {
         let store = SessionStore(records: allRecords)
         return UserStreak(
@@ -60,8 +65,16 @@ struct HomeView: View {
         )
     }
 
+    /// Rotina do usuário — `UserProfile.todaysRoutine()`, não mais a lista completa.
     private var activeStretches: [StretchDefinition] {
-        routineManager.activeStretches
+        profile?.todaysRoutine() ?? []
+    }
+
+    /// Exercícios do catálogo que o usuário não selecionou pra rotina — podem ser
+    /// adicionados de volta via `addExerciseSheet`.
+    private var unselectedStretches: [StretchDefinition] {
+        let selected = Set(profile?.selectedExerciseIDs ?? [])
+        return StretchDefinition.sampleStretches.filter { !selected.contains($0.id) }
     }
 
     private var completedIDsToday: Set<String> {
@@ -92,9 +105,7 @@ struct HomeView: View {
                     case .progress:
                         WendProgressView()
                     case .profile:
-                        // Tela de Profile ainda não implementada — mantém o
-                        // conteúdo de Exercise por ora, sem regressão de comportamento.
-                        exerciseTabContent
+                        WendProfileView()
                     }
                 }
 
@@ -127,12 +138,16 @@ struct HomeView: View {
             .sheet(item: $pendingSession) { pending in
                 SessionSummaryView(record: pending.record, definition: pending.definition)
             }
+            .task {
+                ensureProfileExists()
+            }
             .task(id: allRecords.count) {
                 let store = SessionStore(records: allRecords)
                 await tipService.refreshIfNeeded(
                     context: modelContext,
                     records: allRecords,
-                    streak: store.streakDays
+                    streak: store.streakDays,
+                    profile: profile
                 )
             }
             .navigationDestination(item: $exercisingDefinition) { def in
@@ -145,20 +160,37 @@ struct HomeView: View {
         } // NavigationStack
     }
 
+    // MARK: - Setup
+
+    /// Faz o backfill único de `selectedExerciseIDs` pra perfis criados antes desse
+    /// campo existir (ficariam com rotina vazia sem isso — não há como distinguir
+    /// "nunca configurado" de "esvaziado de propósito" sem onboarding, então trata
+    /// vazio como "não configurado ainda").
+    ///
+    /// Não cria `UserProfile` novo: `RootView` só mostra `HomeView` depois que o
+    /// onboarding já criou e configurou o perfil (`hasCompletedOnboarding == true`),
+    /// então `profiles.first` sempre existe aqui no fluxo normal.
+    private func ensureProfileExists() {
+        guard let existing = profiles.first else { return }
+        if existing.selectedExerciseIDs.isEmpty {
+            existing.selectedExerciseIDs = StretchDefinition.sampleStretches.map(\.id)
+        }
+    }
+
     // MARK: - Exercise Tab Content
 
     private var exerciseTabContent: some View {
         BlurTopScrollView {
             VStack(alignment: .leading, spacing: 22) {
 
-                HeaderView(userName: "Giovana")
+                HeaderView(userName: (profile?.name).flatMap { $0.isEmpty ? nil : $0 } ?? "Friend")
                     .padding(.top, 8)
 
                 StreakCardView(streak: streak)
 
                 // Featured card: botão START inicia a rotina completa
                 FeaturedRoutineCardView(
-                    title: "Lower Back",
+                    title: (profile?.painArea).flatMap { $0.isEmpty ? nil : $0 } ?? "Lower Back",
                     description: "Wake up your body with gentle movements focused on the lower back.",
                     durationText: totalDurationLabel,
                     onStart: {
@@ -190,7 +222,7 @@ struct HomeView: View {
 
                 Spacer()
 
-                if !routineManager.removedStretches.isEmpty {
+                if !unselectedStretches.isEmpty {
                     Button {
                         showAddExerciseSheet = true
                     } label: {
@@ -216,7 +248,7 @@ struct HomeView: View {
                     ForEach(Array(activeStretches.enumerated()), id: \.element.id) { index, def in
                         routineRow(for: def, index: index)
 
-                        if index < activeStretches.count - 1 || !routineManager.removedStretches.isEmpty {
+                        if index < activeStretches.count - 1 || !unselectedStretches.isEmpty {
                             Divider()
                                 .background(WendTheme.Colors.coffee.opacity(0.1))
                                 .padding(.leading, 40)
@@ -225,7 +257,7 @@ struct HomeView: View {
                 }
 
                 // Botão de adicionar exercício no rodapé da lista
-                if !routineManager.removedStretches.isEmpty {
+                if !unselectedStretches.isEmpty {
                     addExerciseRowButton
                 }
             }
@@ -254,7 +286,7 @@ struct HomeView: View {
         .swipeActions(edge: .trailing, allowsFullSwipe: true) {
             Button(role: .destructive) {
                 withAnimation {
-                    routineManager.excludeExercise(def.id)
+                    profile?.deselectExercise(def.id)
                 }
             } label: {
                 Label("Delete", systemImage: "trash.fill")
@@ -299,7 +331,7 @@ struct HomeView: View {
 
             Button("Restore default exercises") {
                 withAnimation {
-                    routineManager.resetToDefaults()
+                    profile?.selectedExerciseIDs = StretchDefinition.sampleStretches.map(\.id)
                 }
             }
             .font(.system(size: 14, weight: .bold))
@@ -318,12 +350,12 @@ struct HomeView: View {
 
                 List {
                     Section {
-                        ForEach(routineManager.removedStretches) { def in
+                        ForEach(unselectedStretches) { def in
                             Button {
                                 withAnimation {
-                                    routineManager.restoreExercise(def.id)
+                                    profile?.selectExercise(def.id)
                                 }
-                                if routineManager.removedStretches.isEmpty {
+                                if unselectedStretches.count <= 1 {
                                     showAddExerciseSheet = false
                                 }
                             } label: {

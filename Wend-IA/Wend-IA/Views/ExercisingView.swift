@@ -40,7 +40,7 @@ struct ExercisingView: View {
         initialIndex: Int = 0,
         isRoutineFlow: Bool = true
     ) {
-        let list = stretches ?? RoutineManager.shared.activeStretches
+        let list = stretches ?? []
         let activeList = list.isEmpty ? StretchDefinition.sampleStretches : list
         self.stretches = activeList
         self.isRoutineFlow = isRoutineFlow

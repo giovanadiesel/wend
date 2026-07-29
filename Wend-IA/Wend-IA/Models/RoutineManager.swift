@@ -1,25 +1,25 @@
 import Foundation
 import Observation
 
-/// Gerenciador de estado reativo para as configurações da rotina do usuário.
+/// Gerenciador de estado reativo para a customização de hold/reps por exercício.
 ///
 /// Persiste no `UserDefaults`:
-/// - Exercícios excluídos/removidos da rotina de hoje.
 /// - Tempo de hold personalizado por exercício.
 /// - Número de repetições personalizadas por exercício.
+///
+/// A seleção de quais exercícios compõem a rotina do usuário vive em
+/// `UserProfile.selectedExerciseIDs` (SwiftData) — ver `UserProfile.todaysRoutine()`.
 @Observable
 public final class RoutineManager: @unchecked Sendable {
     public static let shared = RoutineManager()
 
     // MARK: - AppStorage Keys
 
-    private let excludedKey = "wend_excluded_exercise_ids"
     private let holdDurationsKey = "wend_custom_hold_durations"
     private let targetRepsKey = "wend_custom_target_reps"
 
     // MARK: - Published State
 
-    public private(set) var excludedIDs: Set<String> = []
     public private(set) var customHoldDurations: [String: Double] = [:]
     public private(set) var customTargetReps: [String: Int] = [:]
 
@@ -32,9 +32,6 @@ public final class RoutineManager: @unchecked Sendable {
     // MARK: - Persistence Helpers
 
     private func loadSettings() {
-        if let excludedArray = UserDefaults.standard.array(forKey: excludedKey) as? [String] {
-            excludedIDs = Set(excludedArray)
-        }
         if let holdsDict = UserDefaults.standard.dictionary(forKey: holdDurationsKey) as? [String: Double] {
             customHoldDurations = holdsDict
         }
@@ -44,22 +41,11 @@ public final class RoutineManager: @unchecked Sendable {
     }
 
     private func saveSettings() {
-        UserDefaults.standard.set(Array(excludedIDs), forKey: excludedKey)
         UserDefaults.standard.set(customHoldDurations, forKey: holdDurationsKey)
         UserDefaults.standard.set(customTargetReps, forKey: targetRepsKey)
     }
 
     // MARK: - Queries
-
-    /// Retorna todos os exercícios ativos do plano diário (ignorando excluídos).
-    public var activeStretches: [StretchDefinition] {
-        StretchDefinition.sampleStretches.filter { !excludedIDs.contains($0.id) }
-    }
-
-    /// Retorna os exercícios que foram removidos e podem ser adicionados novamente.
-    public var removedStretches: [StretchDefinition] {
-        StretchDefinition.sampleStretches.filter { excludedIDs.contains($0.id) }
-    }
 
     /// Duração do hold para o exercício (personalizada ou padrão da definição).
     public func holdDuration(for stretch: StretchDefinition) -> Double {
@@ -87,23 +73,6 @@ public final class RoutineManager: @unchecked Sendable {
 
     public func updateTargetReps(_ reps: Int, for id: String) {
         customTargetReps[id] = reps
-        saveSettings()
-    }
-
-    public func excludeExercise(_ id: String) {
-        excludedIDs.insert(id)
-        saveSettings()
-    }
-
-    public func restoreExercise(_ id: String) {
-        excludedIDs.remove(id)
-        saveSettings()
-    }
-
-    public func resetToDefaults() {
-        excludedIDs.removeAll()
-        customHoldDurations.removeAll()
-        customTargetReps.removeAll()
         saveSettings()
     }
 }

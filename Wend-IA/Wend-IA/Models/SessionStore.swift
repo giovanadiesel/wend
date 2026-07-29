@@ -8,11 +8,14 @@ import SwiftData
 /// propriedades derivadas computadas — sem estado próprio persistido.
 struct SessionStore {
 
-    // MARK: - Plano fixo do dia
+    // MARK: - Plano do dia
 
-    /// Exercícios prescritos na rotina diária, sempre nesta ordem.
-    /// Fonte de verdade: `StretchDefinition.sampleStretches`.
-    static let dailyPlan: [StretchDefinition] = StretchDefinition.sampleStretches
+    /// Rotina personalizada do usuário para o dia — reutiliza `UserProfile.todaysRoutine()`
+    /// para não duplicar a lógica de filtro por `selectedExerciseIDs`. `nil` (sem profile)
+    /// retorna lista vazia, o que não deveria acontecer no fluxo normal do app.
+    static func dailyPlan(for profile: UserProfile?) -> [StretchDefinition] {
+        profile?.todaysRoutine() ?? []
+    }
 
     // MARK: - Init
 
@@ -24,47 +27,6 @@ struct SessionStore {
         self.records = records
         self.calendar = calendar
         self.today = today
-    }
-
-    // MARK: - Exercícios Concluídos Hoje
-
-    /// IDs dos exercícios com ao menos uma `SessionRecord` registrada hoje.
-    var completedTodayIDs: Set<String> {
-        let start = calendar.startOfDay(for: today)
-        guard let end = calendar.date(byAdding: .day, value: 1, to: start) else { return [] }
-        return Set(
-            records
-                .filter { $0.date >= start && $0.date < end }
-                .map(\.exerciseID)
-        )
-    }
-
-    /// Exercícios do plano diário convertidos em `RoutineItem` com `isCompleted` real.
-    var routineItems: [RoutineItem] {
-        let done = completedTodayIDs
-        return Self.dailyPlan.map { stretch in
-            let detail = detailText(for: stretch)
-            return RoutineItem(
-                title: stretch.name,
-                detail: detail,
-                isCompleted: done.contains(stretch.id)
-            )
-        }
-    }
-
-    /// Quantidade de exercícios do plano já realizados hoje.
-    var goalsCompletedToday: Int { completedTodayIDs.count }
-
-    /// Quantidade total de exercícios no plano diário.
-    var totalGoalsToday: Int { Self.dailyPlan.count }
-
-    // MARK: - Próximo Exercício
-
-    /// Primeiro exercício do plano que ainda não foi feito hoje.
-    /// Retorna `nil` quando todos foram concluídos.
-    var nextExercise: StretchDefinition? {
-        let done = completedTodayIDs
-        return Self.dailyPlan.first { !done.contains($0.id) }
     }
 
     // MARK: - Streak
@@ -98,17 +60,5 @@ struct SessionStore {
         }
 
         return streak
-    }
-
-    // MARK: - Helpers
-
-    private func detailText(for stretch: StretchDefinition) -> String {
-        let mins = Int(stretch.holdDuration * 3) / 60  // holdDuration × 3 reps
-        let secs = Int(stretch.holdDuration * 3) % 60
-        if mins > 0 {
-            return "\(mins) min · Easy"
-        } else {
-            return "\(secs) sec · Easy"
-        }
     }
 }

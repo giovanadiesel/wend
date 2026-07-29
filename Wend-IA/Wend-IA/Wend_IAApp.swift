@@ -34,7 +34,11 @@ struct Wend_IAApp: App {
     
     var body: some Scene {
         WindowGroup {
-            HomeView()
+            RootView()
+                // Wend não tem modo escuro — sem isso, componentes de sistema
+                // (DatePicker, List) seguem a aparência do dispositivo e destoam
+                // do WendTheme, que é só claro.
+                .preferredColorScheme(.light)
         }
         .modelContainer(Wend_IAApp.sharedModelContainer)
     }

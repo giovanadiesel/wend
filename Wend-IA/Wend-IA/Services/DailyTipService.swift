@@ -55,7 +55,7 @@ fileprivate struct PerformanceSummary {
 /// @State private var tipService = DailyTipService()
 ///
 /// .task {
-///     await tipService.refreshIfNeeded(context: modelContext, records: allRecords, streak: store.streakDays)
+///     await tipService.refreshIfNeeded(context: modelContext, records: allRecords, streak: store.streakDays, profile: profile)
 /// }
 ///
 /// TipCardView(tip: TipItem(title: "Tip of the day", text: tipService.currentMessage))
@@ -84,10 +84,13 @@ final class DailyTipService {
     ///   - context: O `ModelContext` ativo da view para leitura/escrita do `DailyTipCache`.
     ///   - records: Array de `SessionRecord` já carregado pelo `@Query` da HomeView.
     ///   - streak: Streak atual calculado pelo `SessionStore`.
+    ///   - profile: Profile do usuário — usado para refletir a rotina personalizada
+    ///     (`UserProfile.todaysRoutine()`) no resumo enviado à IA.
     func refreshIfNeeded(
         context: ModelContext,
         records: [SessionRecord],
-        streak: Int
+        streak: Int,
+        profile: UserProfile?
     ) async {
         // ── 1. Carrega o cache existente ─────────────────────────────────────
         let cached = fetchCache(from: context)
@@ -105,7 +108,7 @@ final class DailyTipService {
         isGenerating = true
         defer { isGenerating = false }
 
-        let summary = buildSummary(records: records, streak: streak)
+        let summary = buildSummary(records: records, streak: streak, profile: profile)
         let newMessage = await generate(summary: summary)
 
         // ── 4. Persiste e publica ─────────────────────────────────────────────
@@ -134,7 +137,7 @@ final class DailyTipService {
 
     // MARK: - Montagem do Resumo de Desempenho
 
-    private func buildSummary(records: [SessionRecord], streak: Int) -> PerformanceSummary {
+    private func buildSummary(records: [SessionRecord], streak: Int, profile: UserProfile?) -> PerformanceSummary {
         let calendar = Calendar.current
         let today = Date()
         let sevenDaysAgo = calendar.date(byAdding: .day, value: -7, to: today) ?? today
@@ -152,7 +155,7 @@ final class DailyTipService {
         // Exercícios concluídos hoje
         let todayRecords = recentRecords.filter { calendar.isDateInToday($0.date) }
         let completedTodayIDs = Set(todayRecords.map(\.exerciseID))
-        let plan = SessionStore.dailyPlan
+        let plan = SessionStore.dailyPlan(for: profile)
 
         // Exercício com pior precisão média nos últimos 7 dias (excluindo os de hoje)
         let weakest = weakestExerciseName(from: recentRecords, plan: plan)
