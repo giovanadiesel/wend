@@ -5,18 +5,7 @@ import Foundation
 import Vision
 
 /// Processa frames de vídeo, executa `VNDetectHumanBodyPoseRequest` e publica
-/// o mapa de articulações detectadas com confiança ≥ 0.5.
-///
-/// ### Uso típico
-/// ```swift
-/// let camera = CameraManager()
-/// let analyzer = PoseAnalyzer()
-/// analyzer.connect(to: camera)
-/// camera.start()
-/// ```
-///
-/// - Note: A análise ocorre em uma fila de background dedicada.
-///   Todas as atualizações dos `@Published` são enviadas para a main queue.
+/// o mapa de articulações detectadas com confiança ≥ 0.3 para suportar diferentes condições de iluminação em dispositivos físicos.
 public final class PoseAnalyzer: ObservableObject {
 
     // MARK: - Tipos Públicos
@@ -26,7 +15,7 @@ public final class PoseAnalyzer: ObservableObject {
 
     /// Resultado de uma avaliação de regra de ângulo articular.
     public struct AngleEvaluation {
-        /// Ângulo calculado em graus (0–180).
+        /// Ângulo calculated em graus (0–180).
         public let degrees: Double
         /// `true` se `degrees` está dentro do `acceptableRange` da regra avaliada.
         public let isWithinRange: Bool
@@ -34,8 +23,7 @@ public final class PoseAnalyzer: ObservableObject {
 
     // MARK: - Estado Publicado
 
-    /// Articulações detectadas no frame mais recente com confidence ≥ 0.5.
-    /// Dicionário vazio quando nenhuma pose é detectada.
+    /// Articulações detectadas no frame mais recente.
     @Published public private(set) var detectedJoints: JointMap = [:]
 
     /// `true` enquanto ao menos uma articulação estiver sendo detectada.
@@ -58,8 +46,6 @@ public final class PoseAnalyzer: ObservableObject {
     // MARK: - Conexão com CameraManager
 
     /// Inscreve o `PoseAnalyzer` no `framePublisher` de um `CameraManager`.
-    ///
-    /// - Parameter cameraManager: Instância gerenciando a sessão de captura ativa.
     public func connect(to cameraManager: CameraManager) {
         cameraManager.framePublisher
             .receive(on: analysisQueue)
@@ -82,14 +68,14 @@ public final class PoseAnalyzer: ObservableObject {
         let request = VNDetectHumanBodyPoseRequest()
 
         do {
-            // `orientation: .up` é o padrão para câmera frontal em portrait
+            // `orientation: .up` para quadros convertidos em retrato pelo AVCaptureConnection
             try sequenceHandler.perform([request], on: pixelBuffer, orientation: .up)
         } catch {
             publishJoints([:])
             return
         }
 
-        // Usa apenas a primeira observação (pessoa mais proeminente no frame)
+        // Usa a primeira observação (pessoa mais proeminente no frame)
         guard
             let observation = request.results?.first,
             let allPoints = try? observation.recognizedPoints(.all)
@@ -98,8 +84,8 @@ public final class PoseAnalyzer: ObservableObject {
             return
         }
 
-        // Filtra articulações com confidence menor que 0.5
-        let confident = allPoints.filter { $0.value.confidence >= 0.5 }
+        // Filtra articulações com confidence ≥ 0.3 para melhor sensibilidade em dispositivos físicos
+        let confident = allPoints.filter { $0.value.confidence >= 0.3 }
         publishJoints(confident)
     }
 
@@ -112,27 +98,34 @@ public final class PoseAnalyzer: ObservableObject {
 
     // MARK: - Avaliação de Ângulo
 
-    /// Avalia uma `JointAngleRule` usando os pontos detectados no frame atual.
-    ///
-    /// Recupera os três pontos da articulação da regra em `detectedJoints`,
-    /// calcula o ângulo com a função `angle(vertex:pointA:pointC:)` e verifica
-    /// se o resultado está dentro do `acceptableRange` definido na regra.
-    ///
-    /// - Parameter rule: Regra de ângulo articular a ser verificada.
-    /// - Returns: Um `AngleEvaluation` com o grau calculado e conformidade,
-    ///   ou `nil` se qualquer uma das três articulações não estiver detectada
-    ///   com confiança suficiente no frame atual.
+    /// Avalia uma `JointAngleRule` usando os pontos detectados no frame atual
+    /// e emite logs em tempo real para diagnóstico em dispositivos físicos.
     public func evaluateAngle(rule: JointAngleRule) -> AngleEvaluation? {
+        let ptA = detectedJoints[rule.jointA]
+        let ptB = detectedJoints[rule.jointB]
+        let ptC = detectedJoints[rule.jointC]
+
+        let confA = ptA?.confidence ?? 0
+        let confB = ptB?.confidence ?? 0
+        let confC = ptC?.confidence ?? 0
+
         guard let eval = evaluateJointAngle(
             jointA: rule.jointA,
             jointB: rule.jointB,
             jointC: rule.jointC,
-            in: detectedJoints
-        ) else { return nil }
+            in: detectedJoints,
+            minConfidence: 0.3
+        ) else {
+            print("🔍 [PoseAnalyzer Log] Rule Vertex (\(rule.jointB.rawValue)): Point(s) missing or confidence < 0.3 — confA(\(rule.jointA.rawValue)): \(String(format: "%.2f", confA)), confB(\(rule.jointB.rawValue)): \(String(format: "%.2f", confB)), confC(\(rule.jointC.rawValue)): \(String(format: "%.2f", confC))")
+            return nil
+        }
+
+        let inRange = rule.acceptableRange.contains(eval.degrees)
+        print("📐 [PoseAnalyzer Log] Rule (\(rule.jointB.rawValue)): Raw Angle = \(String(format: "%.1f", eval.degrees))° | Range: \(rule.acceptableRange) | In Range: \(inRange) | Confidences -> A(\(rule.jointA.rawValue)): \(String(format: "%.2f", eval.confA)), B(\(rule.jointB.rawValue)): \(String(format: "%.2f", eval.confB)), C(\(rule.jointC.rawValue)): \(String(format: "%.2f", eval.confC))")
 
         return AngleEvaluation(
             degrees: eval.degrees,
-            isWithinRange: rule.acceptableRange.contains(eval.degrees)
+            isWithinRange: inRange
         )
     }
 }

@@ -135,10 +135,14 @@ public final class CameraManager: NSObject, ObservableObject {
             }
             self.session.addOutput(videoOutput)
 
-            // Espelha a imagem para que a câmera frontal se comporte como um espelho
-            if let connection = videoOutput.connection(with: .video),
-               connection.isVideoMirroringSupported {
-                connection.isVideoMirrored = true
+            // Configura orientação retrato e espelhamento para a câmera frontal
+            if let connection = videoOutput.connection(with: .video) {
+                if connection.isVideoOrientationSupported {
+                    connection.videoOrientation = .portrait
+                }
+                if connection.isVideoMirroringSupported {
+                    connection.isVideoMirrored = true
+                }
             }
         }
     }
