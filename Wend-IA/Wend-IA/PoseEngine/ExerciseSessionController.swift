@@ -1,6 +1,5 @@
 import Combine
 import Foundation
-import Vision
 
 /// Coordena uma sessão de exercício combinando `PoseAnalyzer` e `StretchDefinition`.
 ///
@@ -182,9 +181,6 @@ final class ExerciseSessionController: ObservableObject {
     /// de forma independente da taxa de frames da câmera.
     private var displayTimer: AnyCancellable?
 
-    /// Throttle do log de diagnóstico de avaliação — no máximo 1 print/segundo.
-    private var lastEvaluationLogDate: Date = .distantPast
-
     // MARK: - Init
 
     /// - Parameters:
@@ -334,7 +330,6 @@ final class ExerciseSessionController: ObservableObject {
             return RuleEvaluation(degrees: degrees, isWithinRange: inRange)
         }
         evaluations = currentEvaluations
-        logEvaluationIfNeeded(currentEvaluations)
 
         // "Em posição" = todas as regras com articulações detectadas e afastadas o
         // suficiente da baseline. Se alguma articulação não é detectada (nil) ou a
@@ -422,37 +417,7 @@ final class ExerciseSessionController: ObservableObject {
             guard !samples.isEmpty else { return nil }
             return samples.reduce(0, +) / Double(samples.count)
         }
-
-        let summary = zip(definition.targetJoints, zip(baselineSamples, baselineAngles))
-            .map { rule, pair in
-                let (samples, angle) = pair
-                let angleStr = angle.map { String(format: "%.1f°", $0) } ?? "NENHUMA AMOSTRA"
-                return "\(rule.jointB.rawValue.rawValue)=\(angleStr) (\(samples.count) amostras)"
-            }
-            .joined(separator: " | ")
-        print("🎯 [Baseline] Calibração concluída — \(summary)")
-
         phase = .waitingForPosition
-    }
-
-    /// Log temporário de diagnóstico (throttled a 1x/segundo) comparando o
-    /// ângulo atual de cada regra com a baseline calibrada.
-    private func logEvaluationIfNeeded(_ currentEvaluations: [RuleEvaluation?]) {
-        let now = Date()
-        guard now.timeIntervalSince(lastEvaluationLogDate) >= 1.0 else { return }
-        lastEvaluationLogDate = now
-
-        let summary = zip(definition.targetJoints, zip(currentEvaluations, baselineAngles))
-            .map { rule, pair in
-                let (eval, baseline) = pair
-                let baselineStr = baseline.map { String(format: "%.1f°", $0) } ?? "sem baseline"
-                guard let eval else { return "\(rule.jointB.rawValue.rawValue)=sem detecção (baseline: \(baselineStr))" }
-                let delta = baseline.map { abs(eval.degrees - $0) }
-                let deltaStr = delta.map { String(format: "%.1f°", $0) } ?? "?"
-                return "\(rule.jointB.rawValue.rawValue)=\(String(format: "%.1f°", eval.degrees)) baseline=\(baselineStr) delta=\(deltaStr)/\(rule.minimumDeltaFromBaseline)° inRange=\(eval.isWithinRange)"
-            }
-            .joined(separator: " | ")
-        print("📊 [Eval] \(summary)")
     }
 
     // MARK: - Helpers de Cronômetro

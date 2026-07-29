@@ -40,16 +40,17 @@ public struct StretchDefinition: Identifiable, Hashable, Sendable {
 extension StretchDefinition {
     /// Exercícios do plano diário.
     ///
-    /// `minimumDeltaFromBaseline` é validado em relação à posição neutra do
+    /// `minimumDeltaFromBaseline` é avaliado em relação à posição neutra do
     /// próprio usuário (calibrada no início de cada sessão — ver
-    /// `ExerciseSessionController`), não a uma faixa de graus absoluta. Os valores
-    /// abaixo são estimativas iniciais (derivadas da largura das faixas antigas,
-    /// calibradas por `VideoAngleAnalyzerScript` sobre vídeos de referência em
-    /// 2026-07-24) e ainda precisam de ajuste fino em teste real com o app.
+    /// `ExerciseSessionController`), não a uma faixa de graus absoluta. Cat Camel,
+    /// Seated Spinal Twist e Piriformis Stretch foram validados em dispositivo
+    /// físico real em 2026-07-29 (ver comentários por exercício). Bridge Pose e
+    /// Lumbar Rotation rodam em modo time-only — o Vision não detecta joints com
+    /// confiança suficiente em poses supinas, então não há como validar ângulo.
     static let sampleStretches: [StretchDefinition] = [
 
         // ── 1. Cat Camel ────────────────────────────────────────────────────────
-        // Delta estimado: 15° (faixa antiga tinha 25° de largura, 110°-135°)
+        // Validado em dispositivo físico em 2026-07-29 — precisão ~60%.
         StretchDefinition(
             id: "cat-camel",
             name: "Cat Camel",
@@ -80,7 +81,11 @@ extension StretchDefinition {
         ),
 
         // ── 2. Bridge Pose ──────────────────────────────────────────────────────
-        // Delta estimado: 15° (faixa antiga tinha 30° de largura, 80°-110°)
+        // Pose supina — testado em dispositivo físico (2026-07-29): calibração só
+        // conseguiu 3 amostras (mínimo é 5) e o joelho nunca mais foi detectado
+        // com confiança depois disso, em nenhum momento da sessão. Mesmo padrão
+        // documentado no Lumbar Rotation abaixo — o Vision estruturalmente não
+        // detecta bem joints em posição horizontal. Modo time-only.
         StretchDefinition(
             id: "bridge-pose",
             name: "Bridge Pose",
@@ -99,20 +104,12 @@ extension StretchDefinition {
             """,
             breathingTip: "Inhale to prepare. Exhale as you lift your hips, engaging your core and glutes. Breathe steadily at the top — avoid holding your breath. Inhale as you slowly lower back down.",
             holdDuration: 15,
-            targetJoints: [
-                // rightHip → rightKnee (vértice) → rightAnkle
-                JointAngleRule(
-                    jointA: .rightHip,
-                    jointB: .rightKnee,
-                    jointC: .rightAnkle,
-                    minimumDeltaFromBaseline: 15.0,
-                    mistakeHint: "Adjust your foot position — your knee should be at roughly 90° to the floor."
-                ),
-            ]
+            targetJoints: [] // Exercício supino — rastreio por tempo (sem ângulo)
         ),
 
         // ── 3. Seated Spinal Twist ──────────────────────────────────────────────
-        // Delta estimado: 20° (faixa antiga tinha 50° de largura, 80°-130°)
+        // Validado em dispositivo físico em 2026-07-29 — precisão ~40%,
+        // variação real de até 54.7° (bem acima do limiar de 12°).
         StretchDefinition(
             id: "seated-spinal-twist",
             name: "Seated Spinal Twist",
@@ -133,19 +130,28 @@ extension StretchDefinition {
             breathingTip: "Inhale to sit taller and create space in your spine. Exhale to gently deepen the twist — never force the rotation. With each breath cycle, imagine growing an inch taller before rotating a little further.",
             holdDuration: 20,
             targetJoints: [
-                // leftShoulder → rightShoulder (vértice) → rightHip
+                // leftShoulder → rightShoulder (vértice) → nose
+                // Trocado de rightHip em 2026-07-29 (perna cruzada ofusca o quadril).
+                // Uma tentativa intermediária usou leftShoulder→neck(vértice)→rightShoulder,
+                // mas pescoço e ombros ficam quase colineares — o ângulo fica travado em
+                // ~180° porque giro encurta a linha, não muda o ângulo dela. A estrutura
+                // original (vértice no ombro, terceiro ponto fora da linha dos ombros) é
+                // que capturava a rotação de verdade — só trocamos o quadril (ofuscado)
+                // pelo nariz (bem detectado e fora da linha).
                 JointAngleRule(
                     jointA: .leftShoulder,
                     jointB: .rightShoulder,
-                    jointC: .rightHip,
-                    minimumDeltaFromBaseline: 20.0,
+                    jointC: .nose,
+                    minimumDeltaFromBaseline: 12.0,
                     mistakeHint: "Rotate further — keep your hips stable and gently guide your shoulder away from your hip."
                 ),
             ]
         ),
 
         // ── 4. Seated Piriformis Stretch ────────────────────────────────────────
-        // Delta estimado: 20° (faixa antiga tinha 60° de largura, 60°-120°)
+        // Validado em dispositivo físico em 2026-07-29 — precisão ~70%,
+        // variação real de 30°-95° (câmera alta, angulada pra baixo, mostrando
+        // quadril e joelhos por completo — recomendado nas instruções do app).
         StretchDefinition(
             id: "piriformis-stretch",
             name: "Piriformis Stretch",

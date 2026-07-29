@@ -439,7 +439,10 @@ private struct BottomSessionCard: View {
                 )
                 statCard(
                     label: "PRECISION",
-                    value: controller.phase == .calibratingBaseline
+                    // Exercícios time-only (sem targetJoints) não validam postura por
+                    // ângulo — mostrar "—" deixa claro que não há métrica de precisão
+                    // real aqui, em vez de sugerir um número (que ficaria sempre ~100%).
+                    value: (definition.targetJoints.isEmpty || controller.phase == .calibratingBaseline)
                         ? "—"
                         : "\(Int(controller.withinRangePercentage.rounded()))%",
                     color: WendTheme.Colors.greenBasic
