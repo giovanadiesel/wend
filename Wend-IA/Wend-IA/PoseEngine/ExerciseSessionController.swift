@@ -57,6 +57,20 @@ final class ExerciseSessionController: ObservableObject {
         let isWithinRange: Bool
     }
 
+    /// Estatística de movimento por regra ao final da sessão, usada para gerar
+    /// feedback pós-sessão específico sobre qual parte do corpo/movimento foi
+    /// avaliado, em vez de só um percentual agregado.
+    struct RuleFeedbackStat {
+        /// Nome legível do movimento (ver `JointAngleRule.movementLabel`).
+        let movementLabel: String
+        /// Variação mínima exigida, em graus, pra contar como "dentro da faixa".
+        let requiredDelta: Double
+        /// Maior variação medida em relação à baseline durante toda a sessão.
+        let maxDeltaAchieved: Double
+        /// Variação média medida em relação à baseline durante toda a sessão.
+        let averageDeltaAchieved: Double
+    }
+
     // MARK: - Estado Publicado
 
     /// Fase atual da sessão.
@@ -99,7 +113,15 @@ final class ExerciseSessionController: ObservableObject {
     ///
     /// A responsabilidade de criar e salvar `SessionRecord` é da camada de UI —
     /// o controller não importa SwiftData, mantendo o PoseEngine testável.
-    var onSessionFinished: ((_ holdDurationAchieved: TimeInterval, _ withinRangePercentage: Double) -> Void)?
+    ///
+    /// `stats` traz o desempenho real por movimento (ver `RuleFeedbackStat`),
+    /// usado para gerar feedback pós-sessão específico sobre corpo/ângulos —
+    /// vazio para exercícios time-only, que não medem ângulo.
+    var onSessionFinished: ((
+        _ holdDurationAchieved: TimeInterval,
+        _ withinRangePercentage: Double,
+        _ stats: [RuleFeedbackStat]
+    ) -> Void)?
 
     // MARK: - Dependências
 
@@ -146,6 +168,11 @@ final class ExerciseSessionController: ObservableObject {
     /// `minimumDeltaFromBaseline - hysteresisMargin`, não assim que cruza o
     /// limiar de entrada. Evita o "flicker" da % de precisão perto da borda.
     private let hysteresisMargin: Double = 5.0
+
+    /// Todas as variações (delta em relação à baseline) medidas por regra
+    /// durante a sessão inteira — usadas para montar `RuleFeedbackStat` no
+    /// fim, com dados reais de quanto cada movimento foi executado.
+    private var ruleDeltaSamples: [[Double]] = []
 
     // MARK: - Internals — Publicação Suavizada da Precisão
 
@@ -194,7 +221,11 @@ final class ExerciseSessionController: ObservableObject {
         analyzer: PoseAnalyzer,
         targetRepetitions: Int = 3,
         calibrationDuration: TimeInterval = 2.5,
-        onSessionFinished: ((_ holdDurationAchieved: TimeInterval, _ withinRangePercentage: Double) -> Void)? = nil
+        onSessionFinished: ((
+            _ holdDurationAchieved: TimeInterval,
+            _ withinRangePercentage: Double,
+            _ stats: [RuleFeedbackStat]
+        ) -> Void)? = nil
     ) {
         self.definition = definition
         self.analyzer = analyzer
@@ -218,6 +249,7 @@ final class ExerciseSessionController: ObservableObject {
             baselineSamples = Array(repeating: [], count: definition.targetJoints.count)
             baselineAngles = Array(repeating: nil, count: definition.targetJoints.count)
             ruleInRangeState = Array(repeating: false, count: definition.targetJoints.count)
+            ruleDeltaSamples = Array(repeating: [], count: definition.targetJoints.count)
             // `calibrationStartDate` só é definido no primeiro frame recebido
             // (ver `evaluateFrame()`) — não aqui, pra não descontar o tempo de
             // startup da câmera (AVCaptureSession pode levar 1-2s pra entregar
@@ -249,7 +281,7 @@ final class ExerciseSessionController: ObservableObject {
         let achieved = holdTimeFromCompletedReps + accumulatedHoldTime
         let accuracy = sessionElapsedTime > 0 ? min((achieved / sessionElapsedTime) * 100, 100) : latestAccuratePercentage
         withinRangePercentage = accuracy
-        onSessionFinished?(achieved, accuracy)
+        onSessionFinished?(achieved, accuracy, computeFeedbackStats())
     }
 
     // MARK: - Subscriptions Privadas
@@ -320,6 +352,8 @@ final class ExerciseSessionController: ObservableObject {
             else { return nil }
 
             let delta = abs(degrees - baseline)
+            ruleDeltaSamples[index].append(delta)
+
             // Histerese: já dentro da faixa exige cair abaixo de um limiar mais
             // baixo pra sair; ainda fora exige cruzar o limiar normal pra entrar.
             let exitThreshold = max(0, rule.minimumDeltaFromBaseline - hysteresisMargin)
@@ -420,6 +454,23 @@ final class ExerciseSessionController: ObservableObject {
         phase = .waitingForPosition
     }
 
+    /// Monta as estatísticas de movimento por regra a partir de `ruleDeltaSamples`,
+    /// pra alimentar o feedback pós-sessão com dados reais. Regras sem nenhuma
+    /// amostra (nunca detectadas fora da calibração) são omitidas.
+    private func computeFeedbackStats() -> [RuleFeedbackStat] {
+        zip(definition.targetJoints, ruleDeltaSamples).compactMap { rule, samples in
+            guard !samples.isEmpty else { return nil }
+            let average = samples.reduce(0, +) / Double(samples.count)
+            let max = samples.max() ?? 0
+            return RuleFeedbackStat(
+                movementLabel: rule.movementLabel,
+                requiredDelta: rule.minimumDeltaFromBaseline,
+                maxDeltaAchieved: max,
+                averageDeltaAchieved: average
+            )
+        }
+    }
+
     // MARK: - Helpers de Cronômetro
 
     /// Tempo acumulado de hold para a repetição em curso, calculado no instante `date`.
@@ -463,7 +514,7 @@ final class ExerciseSessionController: ObservableObject {
             let achieved = holdTimeFromCompletedReps
             let accuracy = latestAccuratePercentage
             withinRangePercentage = accuracy
-            onSessionFinished?(achieved, accuracy)
+            onSessionFinished?(achieved, accuracy, computeFeedbackStats())
         }
     }
 }

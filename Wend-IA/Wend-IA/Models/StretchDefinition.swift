@@ -75,7 +75,8 @@ extension StretchDefinition {
                     jointB: .rightHip,
                     jointC: .rightKnee,
                     minimumDeltaFromBaseline: 15.0,
-                    mistakeHint: "Increase your range — the arc through your spine needs to be bigger."
+                    mistakeHint: "Increase your range — the arc through your spine needs to be bigger.",
+                    movementLabel: "spine arch"
                 ),
             ]
         ),
@@ -143,7 +144,8 @@ extension StretchDefinition {
                     jointB: .rightShoulder,
                     jointC: .nose,
                     minimumDeltaFromBaseline: 12.0,
-                    mistakeHint: "Rotate further — keep your hips stable and gently guide your shoulder away from your hip."
+                    mistakeHint: "Rotate further — keep your hips stable and gently guide your shoulder away from your hip.",
+                    movementLabel: "torso rotation"
                 ),
             ]
         ),
@@ -178,7 +180,8 @@ extension StretchDefinition {
                     jointB: .rightHip,
                     jointC: .leftKnee,
                     minimumDeltaFromBaseline: 20.0,
-                    mistakeHint: "Lean slightly forward from the hips — this deepens the piriformis stretch."
+                    mistakeHint: "Lean slightly forward from the hips — this deepens the piriformis stretch.",
+                    movementLabel: "hip and glute opening"
                 ),
             ]
         ),

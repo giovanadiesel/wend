@@ -11,6 +11,9 @@ struct SessionSummaryView: View {
 
     let record: SessionRecord
     let definition: StretchDefinition
+    /// Desempenho real por movimento durante a sessão — usado pra gerar
+    /// feedback específico sobre corpo/ângulos. Vazio em exercícios time-only.
+    let stats: [ExerciseSessionController.RuleFeedbackStat]
     let isRoutineFlow: Bool
     let isLastExercise: Bool
     let onNext: () -> Void
@@ -21,6 +24,7 @@ struct SessionSummaryView: View {
     init(
         record: SessionRecord,
         definition: StretchDefinition,
+        stats: [ExerciseSessionController.RuleFeedbackStat] = [],
         isRoutineFlow: Bool = false,
         isLastExercise: Bool = true,
         onNext: @escaping () -> Void = {},
@@ -28,6 +32,7 @@ struct SessionSummaryView: View {
     ) {
         self.record = record
         self.definition = definition
+        self.stats = stats
         self.isRoutineFlow = isRoutineFlow
         self.isLastExercise = isLastExercise
         self.onNext = onNext
@@ -67,7 +72,8 @@ struct SessionSummaryView: View {
             isGenerating = true
             feedback = await CoachingService.generateFeedback(
                 for: record,
-                exerciseName: definition.name
+                exerciseName: definition.name,
+                stats: stats
             )
             isGenerating = false
         }

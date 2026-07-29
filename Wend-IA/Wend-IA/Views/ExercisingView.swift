@@ -29,6 +29,7 @@ struct ExercisingView: View {
 
     /// Controle da sheet de feedback do exercício concluído.
     @State private var activeSummaryRecord: SessionRecord?
+    @State private var activeSummaryStats: [ExerciseSessionController.RuleFeedbackStat] = []
     @State private var showSummarySheet = false
 
     // MARK: - Initializer
@@ -150,6 +151,7 @@ struct ExercisingView: View {
                 SessionSummaryView(
                     record: record,
                     definition: currentDefinition,
+                    stats: activeSummaryStats,
                     isRoutineFlow: isRoutineFlow,
                     isLastExercise: currentIndex == stretches.count - 1,
                     onNext: {
@@ -185,9 +187,10 @@ struct ExercisingView: View {
             definition: effectiveDefinition,
             analyzer: analyzer,
             targetRepetitions: customReps,
-            onSessionFinished: { achieved, accuracy in
+            onSessionFinished: { achieved, accuracy, stats in
                 let record = saveRecord(definition: effectiveDefinition, achieved: achieved, accuracy: accuracy)
                 activeSummaryRecord = record
+                activeSummaryStats = stats
                 showSummarySheet = true
             }
         )

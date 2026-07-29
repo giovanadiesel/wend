@@ -30,7 +30,8 @@ struct PoseTestView: View {
         jointB: .rightHip,
         jointC: .rightKnee,
         minimumDeltaFromBaseline: 15.0,
-        mistakeHint: "Endireite a postura: quadril deve estar alinhado com ombro e joelho."
+        mistakeHint: "Endireite a postura: quadril deve estar alinhado com ombro e joelho.",
+        movementLabel: "spine alignment"
     )
 
     // MARK: - Body

@@ -24,18 +24,24 @@ public struct JointAngleRule: Hashable, Sendable {
     public let minimumDeltaFromBaseline: Double
     /// Texto de feedback exibido ao usuário quando o ângulo está fora do intervalo.
     public let mistakeHint: String
+    /// Nome legível do movimento sendo medido (ex: "spine arch", "torso rotation"),
+    /// usado para tornar o feedback pós-sessão específico sobre qual parte do corpo
+    /// e qual movimento foi avaliado, em vez de genérico.
+    public let movementLabel: String
 
     public init(
         jointA: VNHumanBodyPoseObservation.JointName,
         jointB: VNHumanBodyPoseObservation.JointName,
         jointC: VNHumanBodyPoseObservation.JointName,
         minimumDeltaFromBaseline: Double,
-        mistakeHint: String
+        mistakeHint: String,
+        movementLabel: String
     ) {
         self.jointA = jointA
         self.jointB = jointB
         self.jointC = jointC
         self.minimumDeltaFromBaseline = minimumDeltaFromBaseline
         self.mistakeHint = mistakeHint
+        self.movementLabel = movementLabel
     }
 }

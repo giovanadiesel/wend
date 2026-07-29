@@ -29,30 +29,59 @@ struct CoachingService {
     /// Generates personalized feedback for a completed exercise session.
     static func generateFeedback(
         for record: SessionRecord,
-        exerciseName: String
+        exerciseName: String,
+        stats: [ExerciseSessionController.RuleFeedbackStat] = []
     ) async -> SessionFeedback {
         guard case .available = SystemLanguageModel.default.availability else {
-            return fallback(for: record)
+            return fallback(for: record, stats: stats)
         }
 
-        let prompt = buildPrompt(for: record, exerciseName: exerciseName)
+        let prompt = buildPrompt(for: record, exerciseName: exerciseName, stats: stats)
 
         do {
             let session = LanguageModelSession()
             let response = try await session.respond(to: prompt, generating: SessionFeedback.self)
             return response.content
         } catch {
-            return fallback(for: record)
+            return fallback(for: record, stats: stats)
         }
     }
 
     // MARK: - Private Helpers
 
-    private static func buildPrompt(for record: SessionRecord, exerciseName: String) -> String {
+    private static func buildPrompt(
+        for record: SessionRecord,
+        exerciseName: String,
+        stats: [ExerciseSessionController.RuleFeedbackStat]
+    ) -> String {
         let precision = Int(record.withinRangePercentage.rounded())
         let achieved  = Int(record.holdDurationAchieved.rounded())
         let target    = Int(record.targetHoldDuration.rounded())
         let quality   = qualityLabel(precision: precision, achieved: achieved, target: target)
+
+        let movementSection: String
+        if stats.isEmpty {
+            movementSection = ""
+        } else {
+            let lines = stats.map { stat -> String in
+                let percentOfTarget = stat.requiredDelta > 0
+                    ? Int((stat.averageDeltaAchieved / stat.requiredDelta * 100).rounded())
+                    : 100
+                return "- \(stat.movementLabel): averaged \(String(format: "%.0f", stat.averageDeltaAchieved))° of motion (target was \(String(format: "%.0f", stat.requiredDelta))°, \(percentOfTarget)% of target), best moment reached \(String(format: "%.0f", stat.maxDeltaAchieved))°"
+            }.joined(separator: "\n")
+            movementSection = """
+
+
+            MOVEMENT DETAIL (measured this session, per body movement tracked):
+            \(lines)
+
+            Reference the specific movement(s) above by name in your feedback — name the
+            body part or movement (e.g. "spine arch", "torso rotation"), not just a
+            generic "posture" or "accuracy" percentage. If a movement fell short of its
+            target, mention it by name in the tip. If it met or exceeded target, mention
+            that specifically in what went well.
+            """
+        }
 
         return """
         You are a supportive physical wellness coach specializing in lower back health.
@@ -64,12 +93,13 @@ struct CoachingService {
         - Tone: warm, positive, supportive — like an experienced physical wellness coach
         - Keep sentences short (maximum 20 words per field)
         - Avoid clinical or medical jargon
+        - Be specific: reference actual body parts/movements from MOVEMENT DETAIL when available, not generic posture language
 
         SESSION DATA:
         Exercise: \(exerciseName)
         Posture accuracy: \(precision)%
         Hold time achieved: \(achieved)s out of \(target)s target
-        Overall quality: \(quality)
+        Overall quality: \(quality)\(movementSection)
         """
     }
 
@@ -87,22 +117,37 @@ struct CoachingService {
         }
     }
 
-    private static func fallback(for record: SessionRecord) -> SessionFeedback {
+    private static func fallback(
+        for record: SessionRecord,
+        stats: [ExerciseSessionController.RuleFeedbackStat]
+    ) -> SessionFeedback {
         let precision = Int(record.withinRangePercentage.rounded())
 
         let whatWentWell: String
-        let tipToImprove: String
+        if let strongest = stats.max(by: { relativePerformance($0) < relativePerformance($1) }) {
+            whatWentWell = relativePerformance(strongest) >= 1.0
+                ? "Your \(strongest.movementLabel) averaged \(Int(strongest.averageDeltaAchieved.rounded()))°, meeting the \(Int(strongest.requiredDelta.rounded()))° target."
+                : "Your best \(strongest.movementLabel) reached \(Int(strongest.maxDeltaAchieved.rounded()))°, working toward the \(Int(strongest.requiredDelta.rounded()))° target."
+        } else {
+            switch precision {
+            case 80...: whatWentWell = "You maintained excellent posture throughout the hold."
+            case 60...: whatWentWell = "You completed all repetitions with consistent effort."
+            default: whatWentWell = "You completed the session even when it felt challenging."
+            }
+        }
 
-        switch precision {
-        case 80...:
-            whatWentWell = "You maintained excellent posture throughout the hold."
-            tipToImprove = "Try increasing your hold duration by 5 seconds next time."
-        case 60...:
-            whatWentWell = "You completed all repetitions with consistent effort."
-            tipToImprove = "Focus on slow, steady breathing to stay steady during the hold."
-        default:
-            whatWentWell = "You completed the session even when it felt challenging."
-            tipToImprove = "Start with smaller movements and build up your range gradually."
+        let tipToImprove: String
+        if let weakest = stats.min(by: { relativePerformance($0) < relativePerformance($1) }),
+           relativePerformance(weakest) < 1.0 {
+            tipToImprove = "Try deepening your \(weakest.movementLabel) further — you averaged \(Int(weakest.averageDeltaAchieved.rounded()))° of the \(Int(weakest.requiredDelta.rounded()))° needed."
+        } else if !stats.isEmpty {
+            tipToImprove = "Great range of motion — try holding a touch longer next time."
+        } else {
+            switch precision {
+            case 80...: tipToImprove = "Try increasing your hold duration by 5 seconds next time."
+            case 60...: tipToImprove = "Focus on slow, steady breathing to stay steady during the hold."
+            default: tipToImprove = "Start with smaller movements and build up your range gradually."
+            }
         }
 
         return SessionFeedback(
@@ -110,5 +155,11 @@ struct CoachingService {
             tipToImprove: tipToImprove,
             encouragement: "Session complete! Every step builds long-term back health."
         )
+    }
+
+    /// Razão entre a variação média alcançada e a exigida — usada para
+    /// identificar o movimento mais forte/mais fraco da sessão no fallback.
+    private static func relativePerformance(_ stat: ExerciseSessionController.RuleFeedbackStat) -> Double {
+        stat.requiredDelta > 0 ? stat.averageDeltaAchieved / stat.requiredDelta : 1
     }
 }
