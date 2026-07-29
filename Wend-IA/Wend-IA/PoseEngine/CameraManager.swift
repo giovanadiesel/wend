@@ -135,13 +135,15 @@ public final class CameraManager: NSObject, ObservableObject {
             }
             self.session.addOutput(videoOutput)
 
-            // Configura orientação retrato e espelhamento para a câmera frontal
+            // Configura orientação retrato para a câmera frontal.
+            // Não espelha esta connection: é o buffer de DADOS consumido pelo Vision,
+            // e espelhá-lo inverte os rótulos left/right que o VNDetectHumanBodyPoseRequest
+            // atribui às articulações. O preview layer tem sua própria connection e já
+            // espelha automaticamente para a câmera frontal — os overlays de pose já
+            // compensam isso invertendo X apenas na exibição (ver PoseOverlayView/PoseTestView).
             if let connection = videoOutput.connection(with: .video) {
                 if connection.isVideoOrientationSupported {
                     connection.videoOrientation = .portrait
-                }
-                if connection.isVideoMirroringSupported {
-                    connection.isVideoMirrored = true
                 }
             }
         }

@@ -38,15 +38,18 @@ public struct StretchDefinition: Identifiable, Hashable, Sendable {
 // MARK: - Sample Data
 
 extension StretchDefinition {
-    /// Exercícios do plano diário — `acceptableRange` calibrado via `VideoAngleAnalyzerScript`
-    /// sobre vídeos de referência (P10–P90 observado, conf ≥ 0.3).
+    /// Exercícios do plano diário.
     ///
-    /// Fonte: análise de 15 vídeos em 5 pastas (3 por exercício).
-    /// Data de calibração: 2026-07-24.
+    /// `minimumDeltaFromBaseline` é validado em relação à posição neutra do
+    /// próprio usuário (calibrada no início de cada sessão — ver
+    /// `ExerciseSessionController`), não a uma faixa de graus absoluta. Os valores
+    /// abaixo são estimativas iniciais (derivadas da largura das faixas antigas,
+    /// calibradas por `VideoAngleAnalyzerScript` sobre vídeos de referência em
+    /// 2026-07-24) e ainda precisam de ajuste fino em teste real com o app.
     static let sampleStretches: [StretchDefinition] = [
 
         // ── 1. Cat Camel ────────────────────────────────────────────────────────
-        // Calibrado: P10–P90 110°–126° (conf ≥ 0.3, 2 vídeos)
+        // Delta estimado: 15° (faixa antiga tinha 25° de largura, 110°-135°)
         StretchDefinition(
             id: "cat-camel",
             name: "Cat Camel",
@@ -70,15 +73,14 @@ extension StretchDefinition {
                     jointA: .rightShoulder,
                     jointB: .rightHip,
                     jointC: .rightKnee,
-                    acceptableRange: 110.0...135.0,
+                    minimumDeltaFromBaseline: 15.0,
                     mistakeHint: "Increase your range — the arc through your spine needs to be bigger."
                 ),
             ]
         ),
 
         // ── 2. Bridge Pose ──────────────────────────────────────────────────────
-        // Calibrado: P10–P90 38°–52° (fase de setup); hold estimado 80°–110°
-        // TODO: validar ângulo de hold na PoseTestView
+        // Delta estimado: 15° (faixa antiga tinha 30° de largura, 80°-110°)
         StretchDefinition(
             id: "bridge-pose",
             name: "Bridge Pose",
@@ -99,19 +101,18 @@ extension StretchDefinition {
             holdDuration: 15,
             targetJoints: [
                 // rightHip → rightKnee (vértice) → rightAnkle
-                // TODO: validar na PoseTestView — exercício supino dificulta calibração por vídeo
                 JointAngleRule(
                     jointA: .rightHip,
                     jointB: .rightKnee,
                     jointC: .rightAnkle,
-                    acceptableRange: 80.0...110.0,
+                    minimumDeltaFromBaseline: 15.0,
                     mistakeHint: "Adjust your foot position — your knee should be at roughly 90° to the floor."
                 ),
             ]
         ),
 
         // ── 3. Seated Spinal Twist ──────────────────────────────────────────────
-        // Calibrado: P10–P90 86°–127° (736/792 frames — excelente detecção)
+        // Delta estimado: 20° (faixa antiga tinha 50° de largura, 80°-130°)
         StretchDefinition(
             id: "seated-spinal-twist",
             name: "Seated Spinal Twist",
@@ -137,14 +138,14 @@ extension StretchDefinition {
                     jointA: .leftShoulder,
                     jointB: .rightShoulder,
                     jointC: .rightHip,
-                    acceptableRange: 80.0...130.0,
+                    minimumDeltaFromBaseline: 20.0,
                     mistakeHint: "Rotate further — keep your hips stable and gently guide your shoulder away from your hip."
                 ),
             ]
         ),
 
         // ── 4. Seated Piriformis Stretch ────────────────────────────────────────
-        // Calibrado: P10–P90 65°–120° (211/319 frames)
+        // Delta estimado: 20° (faixa antiga tinha 60° de largura, 60°-120°)
         StretchDefinition(
             id: "piriformis-stretch",
             name: "Piriformis Stretch",
@@ -170,7 +171,7 @@ extension StretchDefinition {
                     jointA: .rightKnee,
                     jointB: .rightHip,
                     jointC: .leftKnee,
-                    acceptableRange: 60.0...120.0,
+                    minimumDeltaFromBaseline: 20.0,
                     mistakeHint: "Lean slightly forward from the hips — this deepens the piriformis stretch."
                 ),
             ]

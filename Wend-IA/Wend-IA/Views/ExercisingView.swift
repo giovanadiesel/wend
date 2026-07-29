@@ -278,7 +278,7 @@ struct ExercisingView: View {
 
 private struct PoseOverlayView: View {
     let joints: [VNHumanBodyPoseObservation.JointName: VNRecognizedPoint]
-    let evaluations: [PoseAnalyzer.AngleEvaluation?]
+    let evaluations: [ExerciseSessionController.RuleEvaluation?]
     let rules: [JointAngleRule]
 
     private var allInRange: Bool {
@@ -439,7 +439,9 @@ private struct BottomSessionCard: View {
                 )
                 statCard(
                     label: "PRECISION",
-                    value: "\(Int(controller.withinRangePercentage.rounded()))%",
+                    value: controller.phase == .calibratingBaseline
+                        ? "—"
+                        : "\(Int(controller.withinRangePercentage.rounded()))%",
                     color: WendTheme.Colors.greenBasic
                 )
             }
@@ -522,6 +524,8 @@ private struct BottomSessionCard: View {
         }
 
         switch controller.phase {
+        case .calibratingBaseline:
+            return "Get into your starting position and hold still — calibrating…"
         case .waitingForPosition:
             return "Position yourself in front of the camera."
         case .holdingPosition:

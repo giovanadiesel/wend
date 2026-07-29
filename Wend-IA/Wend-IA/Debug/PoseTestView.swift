@@ -22,12 +22,14 @@ struct PoseTestView: View {
     // MARK: - Regra de Teste Fixa
 
     /// Ombro direito → Quadril direito (vértice) → Joelho direito.
-    /// Faixa 150–180°: postura ereta lateral esperada durante exercícios lombares.
+    /// Ferramenta de debug — mostra o ângulo bruto medido, sem avaliação de
+    /// faixa/baseline (isso é responsabilidade do `ExerciseSessionController`
+    /// em sessão real).
     private let testRule = JointAngleRule(
         jointA: .rightShoulder,
         jointB: .rightHip,
         jointC: .rightKnee,
-        acceptableRange: 150.0...180.0,
+        minimumDeltaFromBaseline: 15.0,
         mistakeHint: "Endireite a postura: quadril deve estar alinhado com ombro e joelho."
     )
 
@@ -124,19 +126,19 @@ struct PoseTestView: View {
     /// Atualizado a cada frame publicado pelo `PoseAnalyzer`.
     @ViewBuilder
     private var liveAngleDisplay: some View {
-        let evaluation = analyzer.evaluateAngle(rule: testRule)
+        let degrees = analyzer.rawDegrees(for: testRule)
 
         HStack(alignment: .firstTextBaseline, spacing: 4) {
-            if let eval = evaluation {
-                Text(String(format: "%.0f", eval.degrees))
+            if let degrees {
+                Text(String(format: "%.0f", degrees))
                     .font(.system(size: 80, weight: .black, design: .monospaced))
-                    .foregroundColor(eval.isWithinRange ? .green : .white)
+                    .foregroundColor(.white)
                     .contentTransition(.numericText(countsDown: false))
-                    .animation(.easeOut(duration: 0.1), value: Int(eval.degrees))
+                    .animation(.easeOut(duration: 0.1), value: Int(degrees))
 
                 Text("°")
                     .font(.system(size: 40, weight: .bold, design: .monospaced))
-                    .foregroundColor(eval.isWithinRange ? .green : .white)
+                    .foregroundColor(.white)
                     .padding(.bottom, 8)
             } else {
                 Text("--")
@@ -150,7 +152,7 @@ struct PoseTestView: View {
 
     @ViewBuilder
     private var angleHUD: some View {
-        let evaluation = analyzer.evaluateAngle(rule: testRule)
+        let degrees = analyzer.rawDegrees(for: testRule)
 
         VStack(alignment: .leading, spacing: 10) {
 
@@ -165,34 +167,10 @@ struct PoseTestView: View {
 
             Divider().background(Color.white.opacity(0.25))
 
-            if let eval = evaluation {
-                // Ângulo e status
-                HStack {
-                    Text(String(format: "Ângulo: %.1f°", eval.degrees))
-                        .font(.system(.body, design: .monospaced, weight: .semibold))
-                        .foregroundColor(.white)
-
-                    Spacer()
-
-                    Text(eval.isWithinRange ? "✅ Dentro da faixa" : "❌ Fora da faixa")
-                        .font(.system(.caption, design: .monospaced, weight: .bold))
-                        .foregroundColor(eval.isWithinRange ? .green : .red)
-                }
-
-                // Faixa aceitável
-                Text(
-                    "Faixa: \(Int(testRule.acceptableRange.lowerBound))°–\(Int(testRule.acceptableRange.upperBound))°"
-                )
-                .font(.caption)
-                .foregroundColor(.white.opacity(0.65))
-
-                // Dica de erro (só quando fora da faixa)
-                if !eval.isWithinRange {
-                    Text("⚠️ \(testRule.mistakeHint)")
-                        .font(.caption)
-                        .foregroundColor(.yellow)
-                        .fixedSize(horizontal: false, vertical: true)
-                }
+            if let degrees {
+                Text(String(format: "Ângulo bruto: %.1f°", degrees))
+                    .font(.system(.body, design: .monospaced, weight: .semibold))
+                    .foregroundColor(.white)
             } else {
                 Text(
                     analyzer.isDetecting

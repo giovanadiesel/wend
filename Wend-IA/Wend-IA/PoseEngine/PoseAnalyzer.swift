@@ -13,14 +13,6 @@ public final class PoseAnalyzer: ObservableObject {
     /// Alias para o dicionário de articulações detectadas no frame atual.
     public typealias JointMap = [VNHumanBodyPoseObservation.JointName: VNRecognizedPoint]
 
-    /// Resultado de uma avaliação de regra de ângulo articular.
-    public struct AngleEvaluation {
-        /// Ângulo calculated em graus (0–180).
-        public let degrees: Double
-        /// `true` se `degrees` está dentro do `acceptableRange` da regra avaliada.
-        public let isWithinRange: Bool
-    }
-
     // MARK: - Estado Publicado
 
     /// Articulações detectadas no frame mais recente.
@@ -42,6 +34,11 @@ public final class PoseAnalyzer: ObservableObject {
     /// Reutiliza o handler de sequência para rastrear movimento entre frames,
     /// melhorando a acurácia do Vision em vídeo contínuo.
     private let sequenceHandler = VNSequenceRequestHandler()
+
+    /// Throttle do log de diagnóstico — no máximo 1 print/segundo, para não
+    /// sobrecarregar a main thread em dispositivo físico (cada `rawDegrees(for:)`
+    /// roda a cada frame, até 30-60x/s).
+    private var lastDiagnosticLogDate: Date = .distantPast
 
     // MARK: - Conexão com CameraManager
 
@@ -98,34 +95,44 @@ public final class PoseAnalyzer: ObservableObject {
 
     // MARK: - Avaliação de Ângulo
 
-    /// Avalia uma `JointAngleRule` usando os pontos detectados no frame atual
-    /// e emite logs em tempo real para diagnóstico em dispositivos físicos.
-    public func evaluateAngle(rule: JointAngleRule) -> AngleEvaluation? {
-        let ptA = detectedJoints[rule.jointA]
-        let ptB = detectedJoints[rule.jointB]
-        let ptC = detectedJoints[rule.jointC]
-
-        let confA = ptA?.confidence ?? 0
-        let confB = ptB?.confidence ?? 0
-        let confC = ptC?.confidence ?? 0
-
-        guard let eval = evaluateJointAngle(
+    /// Calcula o ângulo bruto (em graus) de uma `JointAngleRule` a partir dos pontos
+    /// detectados no frame atual, ou `nil` se algum dos três joints não tiver
+    /// confiança suficiente. Não decide "dentro da faixa" — isso é responsabilidade
+    /// de quem chama, comparando contra a baseline capturada na sessão atual.
+    public func rawDegrees(for rule: JointAngleRule) -> Double? {
+        let eval = evaluateJointAngle(
             jointA: rule.jointA,
             jointB: rule.jointB,
             jointC: rule.jointC,
             in: detectedJoints,
             minConfidence: 0.3
-        ) else {
-            print("🔍 [PoseAnalyzer Log] Rule Vertex (\(rule.jointB.rawValue)): Point(s) missing or confidence < 0.3 — confA(\(rule.jointA.rawValue)): \(String(format: "%.2f", confA)), confB(\(rule.jointB.rawValue)): \(String(format: "%.2f", confB)), confC(\(rule.jointC.rawValue)): \(String(format: "%.2f", confC))")
-            return nil
-        }
-
-        let inRange = rule.acceptableRange.contains(eval.degrees)
-        print("📐 [PoseAnalyzer Log] Rule (\(rule.jointB.rawValue)): Raw Angle = \(String(format: "%.1f", eval.degrees))° | Range: \(rule.acceptableRange) | In Range: \(inRange) | Confidences -> A(\(rule.jointA.rawValue)): \(String(format: "%.2f", eval.confA)), B(\(rule.jointB.rawValue)): \(String(format: "%.2f", eval.confB)), C(\(rule.jointC.rawValue)): \(String(format: "%.2f", eval.confC))")
-
-        return AngleEvaluation(
-            degrees: eval.degrees,
-            isWithinRange: inRange
         )
+
+        logDiagnosticsIfNeeded(rule: rule, eval: eval)
+
+        return eval?.degrees
+    }
+
+    /// Log temporário de diagnóstico, throttled a 1x/segundo — TODO: remover
+    /// depois de confirmar por que rightShoulder/rightHip/rightKnee não são
+    /// detectados com confiança suficiente em dispositivo físico.
+    private func logDiagnosticsIfNeeded(
+        rule: JointAngleRule,
+        eval: (degrees: Double, confA: Float, confB: Float, confC: Float)?
+    ) {
+        let now = Date()
+        guard now.timeIntervalSince(lastDiagnosticLogDate) >= 1.0 else { return }
+        lastDiagnosticLogDate = now
+
+        let confA = detectedJoints[rule.jointA]?.confidence ?? 0
+        let confB = detectedJoints[rule.jointB]?.confidence ?? 0
+        let confC = detectedJoints[rule.jointC]?.confidence ?? 0
+        let detectedNames = detectedJoints.keys.map(\.rawValue.rawValue).sorted().joined(separator: ", ")
+
+        if let eval {
+            print("📐 [Pose] \(rule.jointA.rawValue)=\(String(format: "%.2f", eval.confA)) \(rule.jointB.rawValue)=\(String(format: "%.2f", eval.confB)) \(rule.jointC.rawValue)=\(String(format: "%.2f", eval.confC)) → \(String(format: "%.1f", eval.degrees))°")
+        } else {
+            print("🔍 [Pose] MISSING — \(rule.jointA.rawValue)=\(String(format: "%.2f", confA)) \(rule.jointB.rawValue)=\(String(format: "%.2f", confB)) \(rule.jointC.rawValue)=\(String(format: "%.2f", confC)) | detected(\(detectedJoints.count)): \(detectedNames)")
+        }
     }
 }
