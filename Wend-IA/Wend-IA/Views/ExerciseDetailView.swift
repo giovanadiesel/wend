@@ -329,6 +329,33 @@ struct ExerciseDetailView: View {
         }
     }
 
+    /// Nome do arquivo (sem extensão) do vídeo demonstrativo em loop, se houver
+    /// um para este exercício. `nil` cai no ícone/gradiente padrão do banner.
+    private var demoVideoResourceName: String? {
+        switch definition.id {
+        case "cat-camel": return "cat-camel-demo"
+        case "bridge-pose": return "bridge-pose-demo"
+        default: return nil
+        }
+    }
+
+    /// Animação temporária (boneco de palito) para exercícios sem vídeo ainda.
+    /// `nil` quando já existe vídeo (`demoVideoResourceName`) ou não há
+    /// animação temporária definida — cai no ícone/gradiente padrão.
+    @ViewBuilder
+    private var placeholderAnimation: some View {
+        switch definition.id {
+        case "seated-spinal-twist": SeatedTwistAnimationView()
+        case "piriformis-stretch":  PiriformisAnimationView()
+        case "lumbar-rotation":     LumbarRotationAnimationView()
+        default:                    EmptyView()
+        }
+    }
+
+    private var hasPlaceholderAnimation: Bool {
+        ["seated-spinal-twist", "piriformis-stretch", "lumbar-rotation"].contains(definition.id)
+    }
+
     private var bannerIcon: String {
         switch definition.id {
         case "cat-camel":          return "figure.flexibility"
@@ -384,17 +411,29 @@ struct ExerciseDetailView: View {
 
     private var bannerSection: some View {
         ZStack(alignment: .bottomLeading) {
-            LinearGradient(
-                colors: bannerColors,
-                startPoint: .topLeading,
-                endPoint: .bottomTrailing
-            )
-            .frame(height: 200)
+            if let videoName = demoVideoResourceName {
+                LoopingVideoView(resourceName: videoName, resourceExtension: "mp4")
+                    .frame(height: 200)
+                    .frame(maxWidth: .infinity)
+                    .clipped()
+            } else {
+                LinearGradient(
+                    colors: bannerColors,
+                    startPoint: .topLeading,
+                    endPoint: .bottomTrailing
+                )
+                .frame(height: 200)
 
-            Image(systemName: bannerIcon)
-                .font(.system(size: 72, weight: .thin))
-                .foregroundColor(.white.opacity(0.25))
-                .frame(maxWidth: .infinity)
+                if hasPlaceholderAnimation {
+                    placeholderAnimation
+                        .frame(maxWidth: .infinity)
+                } else {
+                    Image(systemName: bannerIcon)
+                        .font(.system(size: 72, weight: .thin))
+                        .foregroundColor(.white.opacity(0.25))
+                        .frame(maxWidth: .infinity)
+                }
+            }
 
             HStack(spacing: 8) {
                 durationBadge
