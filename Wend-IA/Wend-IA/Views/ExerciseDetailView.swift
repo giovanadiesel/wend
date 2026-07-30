@@ -337,23 +337,9 @@ struct ExerciseDetailView: View {
         case "bridge-pose": return "bridge-pose-demo"
         case "seated-spinal-twist": return "seated-spinal-twist-demo"
         case "piriformis-stretch": return "piriformis-demo"
+        case "lumbar-rotation": return "lumbar-rotation-demo"
         default: return nil
         }
-    }
-
-    /// Animação temporária (boneco de palito) para exercícios sem vídeo ainda.
-    /// `nil` quando já existe vídeo (`demoVideoResourceName`) ou não há
-    /// animação temporária definida — cai no ícone/gradiente padrão.
-    @ViewBuilder
-    private var placeholderAnimation: some View {
-        switch definition.id {
-        case "lumbar-rotation": LumbarRotationAnimationView()
-        default:                EmptyView()
-        }
-    }
-
-    private var hasPlaceholderAnimation: Bool {
-        ["lumbar-rotation"].contains(definition.id)
     }
 
     private var bannerIcon: String {
@@ -424,15 +410,10 @@ struct ExerciseDetailView: View {
                 )
                 .frame(height: 200)
 
-                if hasPlaceholderAnimation {
-                    placeholderAnimation
-                        .frame(maxWidth: .infinity)
-                } else {
-                    Image(systemName: bannerIcon)
-                        .font(.system(size: 72, weight: .thin))
-                        .foregroundColor(.white.opacity(0.25))
-                        .frame(maxWidth: .infinity)
-                }
+                Image(systemName: bannerIcon)
+                    .font(.system(size: 72, weight: .thin))
+                    .foregroundColor(.white.opacity(0.25))
+                    .frame(maxWidth: .infinity)
             }
 
             HStack(spacing: 8) {
