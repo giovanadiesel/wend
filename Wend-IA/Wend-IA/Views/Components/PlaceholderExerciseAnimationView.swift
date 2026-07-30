@@ -50,24 +50,6 @@ private struct GroundLine: View {
     }
 }
 
-// MARK: - Piriformis Stretch
-
-/// Tronco inclinando pra frente a partir do quadril, como no hinge do alongamento.
-struct PiriformisAnimationView: View {
-    var body: some View {
-        VStack(spacing: 10) {
-            RockingTorsoFigure(
-                fromAngle: -6,
-                toAngle: 34,
-                anchor: .bottom,
-                duration: 1.8,
-                color: .white.opacity(0.9)
-            )
-            GroundLine(color: .white.opacity(0.35))
-        }
-    }
-}
-
 // MARK: - Lumbar Rotation
 
 /// Figura deitada — tronco fixo, "pernas" (grupo inferior) balançam de um
