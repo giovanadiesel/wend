@@ -2,9 +2,18 @@ import SwiftUI
 
 /// Catálogo de SF Symbols mapeados para o aplicativo Wend.
 public enum WendSymbols {
-    /// Header Sol (`sun.horizon`)
-    public static let headerSun = "sun.horizon"
-    
+    /// Saudação — manhã (`sun.horizon`)
+    public static let greetingMorning = "sun.horizon"
+
+    /// Saudação — tarde (`sun.max`)
+    public static let greetingAfternoon = "sun.max"
+
+    /// Saudação — noite (`sun.haze`)
+    public static let greetingEvening = "sun.haze"
+
+    /// Saudação — madrugada (`moon.stars`)
+    public static let greetingNight = "moon.stars"
+
     /// Duração/Tempo (`clock`)
     public static let durationClock = "clock"
     
