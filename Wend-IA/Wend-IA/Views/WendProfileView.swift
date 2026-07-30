@@ -122,7 +122,13 @@ struct WendProfileView: View {
                     label: "Camera usage",
                     isOn: Binding(
                         get: { profile.cameraEnabled },
-                        set: { profile.cameraEnabled = $0 }
+                        set: { newValue in
+                            profile.cameraEnabled = newValue
+                            // Sem câmera, o app não guia a sessão em tempo real — não faz
+                            // sentido manter lembretes agendados pra tocar um exercício
+                            // que a pessoa desativou o jeito principal de fazer.
+                            Task { await NotificationService.shared.rescheduleReminders(for: profile) }
+                        }
                     )
                 )
             }
@@ -340,15 +346,13 @@ private struct ReminderTimesSheet: View {
 
                 List {
                     Section {
-                        DatePicker("Time", selection: $newTime, displayedComponents: .hourAndMinute)
+                        HStack(spacing: 14) {
+                            DatePicker("Time", selection: $newTime, displayedComponents: .hourAndMinute)
+                                .tint(WendTheme.Colors.greenDark)
 
-                        Button {
-                            addReminder()
-                        } label: {
-                            Text("Add reminder")
-                                .font(.system(size: 15, weight: .bold))
-                                .foregroundColor(WendTheme.Colors.greenDark)
+                            addReminderButton
                         }
+                        .listRowInsets(EdgeInsets(top: 10, leading: 16, bottom: 10, trailing: 16))
                     } header: {
                         Text("Add a reminder")
                     }
@@ -362,6 +366,7 @@ private struct ReminderTimesSheet: View {
                             }
                             .onDelete { offsets in
                                 profile.reminderTimes.remove(atOffsets: offsets)
+                                Task { await NotificationService.shared.rescheduleReminders(for: profile) }
                             }
                         } header: {
                             Text("Your reminders")
@@ -374,7 +379,11 @@ private struct ReminderTimesSheet: View {
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .navigationBarTrailing) {
-                    DismissGlassButton {
+                    DismissGlassButton(
+                        systemImage: "checkmark",
+                        iconColor: WendTheme.Colors.creamLight,
+                        backgroundColor: WendTheme.Colors.greenDark
+                    ) {
                         dismiss()
                     }
                 }
@@ -383,9 +392,32 @@ private struct ReminderTimesSheet: View {
         }
     }
 
+    // MARK: - Add Reminder Button
+
+    /// Botão circular verde sólido inspirado no app Alarms da Apple — usado no
+    /// lugar de um link de texto pra dar mais destaque à ação principal da sheet.
+    private var addReminderButton: some View {
+        Button {
+            addReminder()
+        } label: {
+            ZStack {
+                Circle()
+                    .fill(WendTheme.Colors.greenDark)
+                Image(systemName: "plus")
+                    .font(.system(size: 16, weight: .bold))
+                    .foregroundColor(WendTheme.Colors.creamLight)
+            }
+            .frame(width: 36, height: 36)
+        }
+        .buttonStyle(PlainButtonStyle())
+    }
+
     private func addReminder() {
         let comps = Calendar.current.dateComponents([.hour, .minute], from: newTime)
         profile.reminderTimes.append(comps)
+        // Primeira vez configurando um lembrete é o gatilho natural pra pedir
+        // permissão de notificação — sem passo dedicado no onboarding.
+        Task { await NotificationService.shared.rescheduleReminders(for: profile) }
     }
 
     private func formatted(_ comps: DateComponents) -> String {

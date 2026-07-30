@@ -10,7 +10,9 @@ import SwiftData
 
 @main
 struct Wend_IAApp: App {
-    
+
+    @StateObject private var navigationCoordinator = NavigationCoordinator.shared
+
     /// Container SwiftData compartilhado com os modelos persistidos do app.
     ///
     /// `SessionRecord` armazena o histórico de sessões de exercício.
@@ -39,6 +41,7 @@ struct Wend_IAApp: App {
                 // (DatePicker, List) seguem a aparência do dispositivo e destoam
                 // do WendTheme, que é só claro.
                 .preferredColorScheme(.light)
+                .environmentObject(navigationCoordinator)
         }
         .modelContainer(Wend_IAApp.sharedModelContainer)
     }

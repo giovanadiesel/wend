@@ -29,6 +29,28 @@ struct SessionStore {
         self.today = today
     }
 
+    // MARK: - Exercícios Concluídos Hoje
+
+    /// IDs dos exercícios com ao menos uma `SessionRecord` registrada hoje.
+    var completedTodayIDs: Set<String> {
+        let start = calendar.startOfDay(for: today)
+        guard let end = calendar.date(byAdding: .day, value: 1, to: start) else { return [] }
+        return Set(
+            records
+                .filter { $0.date >= start && $0.date < end }
+                .map(\.exerciseID)
+        )
+    }
+
+    /// Primeiro exercício da rotina informada que ainda não foi concluído hoje.
+    /// Retorna `nil` quando todos já foram concluídos — quem chama decide o
+    /// que fazer nesse caso (ex: `StartStretchIntent` cai de volta pro primeiro
+    /// da rotina, pra permitir repetir).
+    func nextExercise(in routine: [StretchDefinition]) -> StretchDefinition? {
+        let done = completedTodayIDs
+        return routine.first { !done.contains($0.id) }
+    }
+
     // MARK: - Streak
 
     /// Número de dias consecutivos (incluindo hoje) com pelo menos uma sessão concluída.

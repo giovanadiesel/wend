@@ -28,6 +28,8 @@ struct HomeView: View {
 
     @Environment(\.modelContext) private var modelContext
 
+    @EnvironmentObject private var navigationCoordinator: NavigationCoordinator
+
     // MARK: - Routine Manager
 
     @State private var routineManager = RoutineManager.shared
@@ -140,6 +142,12 @@ struct HomeView: View {
             }
             .task {
                 ensureProfileExists()
+            }
+            .onChange(of: navigationCoordinator.pendingExercise) { _, newValue in
+                guard let stretch = newValue else { return }
+                isRoutineSessionFlow = false
+                exercisingDefinition = stretch
+                navigationCoordinator.pendingExercise = nil
             }
             .task(id: allRecords.count) {
                 let store = SessionStore(records: allRecords)

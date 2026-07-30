@@ -335,6 +335,7 @@ struct ExerciseDetailView: View {
         switch definition.id {
         case "cat-camel": return "cat-camel-demo"
         case "bridge-pose": return "bridge-pose-demo"
+        case "seated-spinal-twist": return "seated-spinal-twist-demo"
         default: return nil
         }
     }
@@ -345,7 +346,6 @@ struct ExerciseDetailView: View {
     @ViewBuilder
     private var placeholderAnimation: some View {
         switch definition.id {
-        case "seated-spinal-twist": SeatedTwistAnimationView()
         case "piriformis-stretch":  PiriformisAnimationView()
         case "lumbar-rotation":     LumbarRotationAnimationView()
         default:                    EmptyView()
@@ -353,7 +353,7 @@ struct ExerciseDetailView: View {
     }
 
     private var hasPlaceholderAnimation: Bool {
-        ["seated-spinal-twist", "piriformis-stretch", "lumbar-rotation"].contains(definition.id)
+        ["piriformis-stretch", "lumbar-rotation"].contains(definition.id)
     }
 
     private var bannerIcon: String {

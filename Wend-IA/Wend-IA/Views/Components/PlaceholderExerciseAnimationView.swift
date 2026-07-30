@@ -50,24 +50,6 @@ private struct GroundLine: View {
     }
 }
 
-// MARK: - Seated Spinal Twist
-
-/// Tronco + cabeça balançando lateralmente pra sugerir a rotação do twist.
-struct SeatedTwistAnimationView: View {
-    var body: some View {
-        VStack(spacing: 10) {
-            RockingTorsoFigure(
-                fromAngle: -16,
-                toAngle: 16,
-                anchor: .bottom,
-                duration: 1.6,
-                color: .white.opacity(0.9)
-            )
-            GroundLine(color: .white.opacity(0.35))
-        }
-    }
-}
-
 // MARK: - Piriformis Stretch
 
 /// Tronco inclinando pra frente a partir do quadril, como no hinge do alongamento.
